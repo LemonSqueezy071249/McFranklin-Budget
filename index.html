@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Budget</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F7F5F0;
+    --surface: #FFFFFF;
+    --border: #E8E4DC;
+    --text: #1A1A18;
+    --muted: #7A7770;
+    --accent: #2D5016;
+    --accent-light: #EBF2E3;
+    --accent-mid: #6A9E3F;
+    --danger: #C0392B;
+    --danger-light: #FAEAE8;
+    --warn: #B7610A;
+    --warn-light: #FDF3E8;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+
+  /* Layout */
+  .app { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  header { margin-bottom: 2.5rem; }
+  header h1 { font-family: var(--serif); font-size: 2.2rem; font-weight: 400; color: var(--text); letter-spacing: -0.02em; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 2px; }
+
+  /* Config banner */
+  #config-banner {
+    background: #FFF8E6;
+    border: 1px solid #F0D070;
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    font-size: 13.5px;
+  }
+  #config-banner strong { color: #7A5500; }
+  #config-banner p { color: #5C4200; margin-top: 4px; line-height: 1.6; }
+  #config-banner code { background: #F0D070; padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; margin-bottom: 2rem; border-bottom: 1.5px solid var(--border); }
+  .tab { padding: 0.6rem 1.1rem; font-size: 14px; font-weight: 400; color: var(--muted); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1.5px; transition: all 0.15s; font-family: var(--sans); }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Summary cards */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 2rem; }
+  .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; }
+  .summary-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 4px; }
+  .summary-card .value { font-family: var(--serif); font-size: 1.8rem; font-weight: 400; color: var(--text); }
+  .summary-card .value.green { color: var(--accent); }
+  .summary-card .value.red { color: var(--danger); }
+
+  /* Period toggle */
+  .period-toggle { display: flex; gap: 6px; margin-bottom: 1.5rem; align-items: center; }
+  .period-toggle label { font-size: 13px; color: var(--muted); margin-right: 4px; }
+  .toggle-btn { padding: 5px 14px; font-size: 13px; border-radius: 20px; border: 1px solid var(--border); background: none; cursor: pointer; color: var(--muted); font-family: var(--sans); transition: all 0.15s; }
+  .toggle-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  /* Category groups */
+  .group { margin-bottom: 2rem; }
+  .group-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 10px; font-weight: 500; }
+
+  /* Category rows */
+  .cat-row { display: grid; grid-template-columns: 220px 1fr 90px 90px 90px; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .cat-row:last-child { border-bottom: none; }
+  .cat-name { font-size: 14px; font-weight: 400; }
+  .cat-name .sub { font-size: 12px; color: var(--muted); }
+  .progress-bar { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; transition: width 0.3s; }
+  .progress-fill.ok { background: var(--accent-mid); }
+  .progress-fill.warn { background: #E09A2A; }
+  .progress-fill.over { background: var(--danger); }
+  .cat-budget { font-size: 13px; color: var(--muted); text-align: right; }
+  .cat-spent { font-size: 13px; font-weight: 500; text-align: right; }
+  .cat-remain { font-size: 13px; text-align: right; }
+  .cat-remain.pos { color: var(--accent); }
+  .cat-remain.neg { color: var(--danger); }
+
+  /* Progress wrapper */
+  .progress-wrap { display: flex; flex-direction: column; gap: 3px; }
+  .progress-pct { font-size: 11px; color: var(--muted); }
+
+  /* Expense form */
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 2rem; }
+  .form-card h2 { font-family: var(--serif); font-size: 1.3rem; font-weight: 400; margin-bottom: 1.25rem; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label.field-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+  input, select, textarea { font-family: var(--sans); font-size: 14px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text); width: 100%; transition: border-color 0.15s; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); background: #fff; }
+  .btn { font-family: var(--sans); font-size: 14px; padding: 9px 20px; border-radius: 7px; border: none; cursor: pointer; transition: all 0.15s; font-weight: 500; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #1D3A0E; }
+  .btn-secondary { background: none; border: 1px solid var(--border); color: var(--text); }
+  .btn-secondary:hover { background: var(--border); }
+
+  /* CSV import */
+  .import-area { border: 2px dashed var(--border); border-radius: var(--radius); padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .import-area:hover, .import-area.dragover { border-color: var(--accent); background: var(--accent-light); }
+  .import-area p { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .import-area .icon { font-size: 2rem; }
+
+  /* Expense table */
+  .expense-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .expense-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1.5px solid var(--border); }
+  .expense-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); }
+  .expense-table tr:last-child td { border-bottom: none; }
+  .expense-table tr:hover td { background: var(--bg); }
+  .del-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
+  .del-btn:hover { color: var(--danger); background: var(--danger-light); }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--accent-light); color: var(--accent); }
+
+  /* Settings */
+  .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .settings-section h2 { font-family: var(--serif); font-size: 1.2rem; font-weight: 400; margin-bottom: 1rem; }
+  .budget-edit-row { display: grid; grid-template-columns: 1fr 130px 130px 40px; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .budget-edit-row input { padding: 7px 10px; }
+  .budget-edit-row select { padding: 7px 10px; }
+
+  /* Connection status */
+  .conn-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 20px; }
+  .conn-status.connected { background: var(--accent-light); color: var(--accent); }
+  .conn-status.disconnected { background: #FFF3E0; color: var(--warn); }
+  .conn-status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  /* Utility */
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-2 { gap: 8px; }
+  .mt-1 { margin-top: 6px; }
+  .mb-1 { margin-bottom: 8px; }
+  .text-sm { font-size: 13px; }
+  .text-muted { color: var(--muted); }
+  .empty-state { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+  .status-msg { font-size: 13px; padding: 8px 12px; border-radius: 7px; margin-top: 10px; display: none; }
+  .status-msg.success { background: var(--accent-light); color: var(--accent); display: block; }
+  .status-msg.error { background: var(--danger-light); color: var(--danger); display: block; }
+
+  .filter-chip { padding: 5px 14px; font-size: 13px; border-radius: 20px; border: 1px solid var(--border); background: none; cursor: pointer; color: var(--muted); font-family: var(--sans); transition: all 0.15s; }
+  .filter-chip.active { background: var(--text); color: white; border-color: var(--text); }
+  .filter-chip:hover:not(.active) { border-color: var(--text); color: var(--text); }
+  .ytd-note { font-size: 12px; color: var(--muted); font-style: italic; margin-left: 4px; }
+  .cat-ytd { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .cat-ytd .ytd-ok { color: var(--accent-mid); }
+  .cat-ytd .ytd-over { color: var(--danger); }
+  .filter-editor-row { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; }
+  .filter-editor-row h4 { font-size: 13px; font-weight: 500; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .filter-cat-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filter-cat-check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+  .filter-cat-check input { cursor: pointer; width: 14px; height: 14px; accent-color: var(--accent); }
+
+  /* Budget editor grouped drag-drop */
+  .budget-group-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
+  .budget-group-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .budget-group-header .drag-handle { color: var(--muted); font-size: 16px; cursor: grab; flex-shrink: 0; line-height: 1; }
+  .budget-group-name-input { font-size: 14px; font-weight: 500; border: none; background: none; color: var(--text); padding: 2px 4px; flex: 1; font-family: var(--sans); border-radius: 4px; }
+  .budget-group-name-input:focus { outline: none; background: var(--surface); border: 1px solid var(--accent); }
+  .budget-group-body { padding: 4px 0; }
+  .budget-item-row { display: grid; grid-template-columns: 28px 1fr 120px 120px 36px; align-items: center; gap: 8px; padding: 4px 10px; transition: background 0.1s; }
+  .budget-item-row:hover { background: var(--bg); }
+  .budget-item-row.dragging { opacity: 0.35; background: var(--accent-light); }
+  .budget-item-row.drag-over-item { border-top: 2px solid var(--accent); }
+  .budget-group-block.drag-over-group { border: 2px solid var(--accent-mid); background: var(--accent-light); }
+  .item-drag-handle { color: var(--border); font-size: 14px; cursor: grab; text-align: center; transition: color 0.15s; }
+  .budget-item-row:hover .item-drag-handle { color: var(--muted); }
+  .budget-item-row input { padding: 5px 8px; font-size: 13px; }
+  .budget-item-row select { padding: 5px 8px; font-size: 13px; }
+  .group-add-btn { font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 7px 14px 10px; font-family: var(--sans); display: block; }
+  .group-add-btn:hover { text-decoration: underline; }
+  .group-del-btn { font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; padding: 3px 8px; font-family: var(--sans); flex-shrink: 0; white-space: nowrap; }
+  .group-del-btn:hover { color: var(--danger); border-color: var(--danger); }
+  .add-group-btn { border: 2px dashed var(--border); border-radius: var(--radius); padding: 12px; text-align: center; cursor: pointer; font-size: 13px; color: var(--muted); background: none; width: 100%; font-family: var(--sans); transition: all 0.15s; margin-bottom: 1rem; }
+  .add-group-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  @media (max-width: 640px) {
+    .cat-row { grid-template-columns: 1fr 80px 80px; }
+    .cat-row .cat-budget { display: none; }
+    .form-grid { grid-template-columns: 1fr; }
+    .budget-item-row { grid-template-columns: 24px 1fr 90px 36px; }
+    .budget-item-row .period-sel { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="flex items-center justify-between">
+      <div>
+        <h1>Family Budget</h1>
+        <p id="period-label">Loading...</p>
+      </div>
+      <div>
+        <span id="conn-indicator" class="conn-status disconnected"><span class="dot"></span> Not connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Config Banner -->
+  <div id="config-banner">
+    <strong>⚙️ Setup required — connect your Google Sheet</strong>
+    <p>Go to the <strong>Settings</strong> tab and paste in your Google Apps Script Web App URL. See the setup instructions there for a step-by-step guide.</p>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab" onclick="switchTab('expenses')">Expenses</button>
+    <button class="tab" onclick="switchTab('add')">Add Expense</button>
+    <button class="tab" onclick="switchTab('budget')">Budget</button>
+    <button class="tab" onclick="switchTab('rules')">Rules</button>
+    <button class="tab" onclick="switchTab('settings')">Settings</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="tab-dashboard" class="panel active">
+    <div class="summary-grid" id="summary-cards"></div>
+    <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:1.5rem; align-items:flex-start;">
+      <div class="period-toggle">
+        <label>View:</label>
+        <button class="toggle-btn active" onclick="setPeriod('monthly')">This month</button>
+        <button class="toggle-btn" onclick="setPeriod('ytd')">Year to date</button>
+        <button class="toggle-btn" onclick="setPeriod('yearly')">Full year</button>
+        <button class="toggle-btn" onclick="setPeriod('custom')" id="custom-btn">Custom month</button>
+        <select id="month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setCustomMonth(this.value)"></select>
+      </div>
+      <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
+    </div>
+    <div id="categories-view"></div>
+  </div>
+
+  <!-- EXPENSES -->
+  <div id="tab-expenses" class="panel">
+    <div class="flex items-center justify-between mb-1" style="margin-bottom:1rem;">
+      <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400;">All Expenses</h2>
+      <input type="text" id="search-input" placeholder="Search..." style="width:200px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
+    </div>
+    <div id="expense-table-wrap"></div>
+  </div>
+
+  <!-- ADD EXPENSE -->
+  <div id="tab-add" class="panel">
+    <div class="form-card">
+      <h2>Add Expense</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="field-label">Date</label>
+          <input type="date" id="exp-date">
+        </div>
+        <div class="form-group">
+          <label class="field-label">Amount ($)</label>
+          <input type="number" id="exp-amount" placeholder="0.00" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="field-label">Category</label>
+          <select id="exp-cat"></select>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Who paid?</label>
+          <select id="exp-who">
+            <option>Jeff</option>
+            <option>Michelle</option>
+            <option>Joint</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="field-label">Description</label>
+          <input type="text" id="exp-desc" placeholder="e.g. Kroger grocery run">
+        </div>
+        <div class="form-group full">
+          <label class="field-label">Memo <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted); font-size:11px;">— optional, e.g. who a gift was for or what a home purchase was</span></label>
+          <input type="text" id="exp-memo" placeholder="e.g. Birthday gift for Mom">
+        </div>
+      </div>
+      <div style="margin-top:1rem; display:flex; gap:8px;">
+        <button class="btn btn-primary" onclick="addExpense()">Save Expense</button>
+        <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+      </div>
+      <div id="add-status" class="status-msg"></div>
+    </div>
+
+    <!-- CSV Import -->
+    <div class="form-card">
+      <h2>Import from CSV</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1rem;">Export transactions from your bank as CSV, then upload here. We'll try to auto-detect columns.</p>
+      <div class="import-area" id="drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div class="icon">📂</div>
+        <p>Click to choose a CSV file, or drag and drop</p>
+        <p style="font-size:12px; margin-top:4px;">Supports most bank export formats</p>
+      </div>
+      <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSVFile(event)">
+      <div id="csv-preview" style="margin-top:1.5rem; display:none;">
+        <h3 style="font-size:14px; font-weight:500; margin-bottom:0.75rem;">Map CSV columns</h3>
+        <div id="csv-map-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:1rem; font-size:13px;"></div>
+        <div id="csv-preview-table" style="overflow-x:auto; max-height:220px; overflow-y:auto;"></div>
+        <div style="margin-top:1rem; display:flex; gap:8px;">
+          <button class="btn btn-primary" onclick="importCSV()">Import Rows</button>
+          <button class="btn btn-secondary" onclick="cancelCSV()">Cancel</button>
+        </div>
+        <div id="csv-status" class="status-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULES -->
+  <div id="tab-rules" class="panel">
+    <div class="settings-section">
+      <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400; margin-bottom:0.25rem;">Auto-categorization Rules</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">When importing a CSV, if a transaction description contains the text below, it will automatically be assigned the matching category. Rules are checked top-to-bottom — first match wins.</p>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr 36px; gap:8px; margin-bottom:6px;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500; padding:0 2px;">If description contains…</div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500; padding:0 2px;">Assign to category</div>
+        <div></div>
+      </div>
+      <div id="rules-editor"></div>
+      <button class="btn btn-secondary" style="font-size:13px; margin-top:10px;" onclick="addRuleRow()">+ Add rule</button>
+      <div style="margin-top:1rem;">
+        <button class="btn btn-primary" onclick="saveRules()">Save rules</button>
+        <div id="rules-status" class="status-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-settings" class="panel">
+    <div class="settings-section">
+      <h2>Dashboard Filters</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1rem;">Create named filters that show only specific categories on the dashboard. The "All" filter is always available automatically.</p>
+      <div id="filters-editor"></div>
+      <button class="btn btn-secondary" style="font-size:13px; margin-top:10px;" onclick="addFilterRow()">+ Add filter</button>
+      <div style="margin-top:1rem;">
+        <button class="btn btn-primary" onclick="saveFilters()">Save filters</button>
+        <div id="filters-status" class="status-msg"></div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h2>Google Sheets Connection</h2>
+      <div style="background:#F0F7FF; border:1px solid #B5D4F4; border-radius:8px; padding:1rem; margin-bottom:1rem; font-size:13px; line-height:1.7; color:#185FA5;">
+        <strong>Setup guide (one-time, ~10 minutes):</strong><br>
+        1. Go to <a href="https://sheets.google.com" target="_blank" style="color:#185FA5;">sheets.google.com</a> and create a new spreadsheet. Name it "Family Budget".<br>
+        2. In the spreadsheet, click <strong>Extensions → Apps Script</strong>.<br>
+        3. Delete any existing code, then paste in the Apps Script code below and click Save.<br>
+        4. Click <strong>Deploy → New Deployment</strong>. Set type to "Web app". Set "Who has access" to "Anyone". Click Deploy.<br>
+        5. Copy the Web App URL it gives you and paste it below.<br>
+        6. The first time you run it, Google will ask you to authorize — click through.
+      </div>
+      <div style="background:#1A1A18; border-radius:8px; padding:1rem; font-family:monospace; font-size:11.5px; color:#A8D890; line-height:1.6; overflow-x:auto; margin-bottom:1rem; white-space:pre;" id="apps-script-code"></div>
+      <div class="form-group" style="max-width:520px;">
+        <label class="field-label">Web App URL</label>
+        <input type="url" id="sheet-url" placeholder="https://script.google.com/macros/s/..." oninput="saveSheetUrl()">
+      </div>
+      <button class="btn btn-secondary" style="margin-top:8px; font-size:13px;" onclick="testConnection()">Test connection</button>
+      <div id="conn-status-msg" class="status-msg"></div>
+    </div>
+  </div>
+
+  <!-- BUDGET CATEGORIES -->
+  <div id="tab-budget" class="panel">
+    <div class="settings-section">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">
+        <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400;">Budget Categories</h2>
+        <span style="font-size:12px; color:var(--muted);">Drag ⠿ to reorder groups or items</span>
+      </div>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Set budgets, organize into groups, and drag to reorder. Changes sync to Google Sheets.</p>
+      <div style="display:grid; grid-template-columns:28px 1fr 120px 120px 36px; gap:8px; padding:0 10px; margin-bottom:4px;">
+        <div></div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;">Category name</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;">Budget</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;">Period</div>
+        <div></div>
+      </div>
+      <div id="budget-editor"></div>
+      <button class="add-group-btn" onclick="addGroupBlock()">+ Add new group</button>
+      <button class="btn btn-primary" onclick="saveBudgets()">Save budgets</button>
+      <div id="budget-status" class="status-msg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────
+const DEFAULT_CATEGORIES = [
+  { group: "Giving", name: "Tithe (on Net)", budget: 0, period: "monthly" },
+  { group: "Giving", name: "Isaac Missionary Support", budget: 0, period: "monthly" },
+  { group: "Giving", name: "Deeper", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Rent / House Payment / Property Taxes / Insurance", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Water", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Gas", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Electric", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Internet", budget: 0, period: "monthly" },
+  { group: "Housing", name: "HOA Dues", budget: 0, period: "monthly" },
+  { group: "Transportation", name: "Car Insurance", budget: 0, period: "monthly" },
+  { group: "Transportation", name: "Car Registration", budget: 0, period: "yearly" },
+  { group: "Transportation", name: "Van Payment", budget: 0, period: "monthly" },
+  { group: "Transportation", name: "Gas / Tolls", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Health Insurance", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Dental Insurance", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Vision Insurance", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Jeff Term Life", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Michelle Term Life", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Accidental Death & Dismemberment", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Long Term Disability", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Short Term Disability", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Jewelry Insurance", budget: 0, period: "monthly" },
+  { group: "Professional", name: "ACBC Certification", budget: 0, period: "yearly" },
+  { group: "Professional", name: "CST Certification & Credits", budget: 0, period: "yearly" },
+  { group: "Professional", name: "Cellphone", budget: 0, period: "monthly" },
+  { group: "Living", name: "Groceries", budget: 0, period: "monthly" },
+  { group: "Living", name: "Dates / Eating Out / Entertainment", budget: 0, period: "monthly" },
+  { group: "Living", name: "Clothing", budget: 0, period: "monthly" },
+  { group: "Living", name: "Eyeglasses", budget: 0, period: "yearly" },
+  { group: "Living", name: "Gifts", budget: 0, period: "monthly" },
+  { group: "Living", name: "Vacation", budget: 0, period: "yearly" },
+  { group: "Living", name: "Medical", budget: 0, period: "monthly" },
+  { group: "Living", name: "Personal Discretionary", budget: 0, period: "monthly" },
+  { group: "Living", name: "Swim Lessons", budget: 0, period: "monthly" },
+  { group: "Living", name: "Mommy's Helper", budget: 0, period: "monthly" },
+  { group: "Savings", name: "Car Fund / Car", budget: 0, period: "monthly" },
+  { group: "Savings", name: "Home Fund", budget: 0, period: "monthly" },
+  { group: "Savings", name: "401k", budget: 0, period: "monthly" },
+];
+
+let state = {
+  categories: JSON.parse(localStorage.getItem('budget_cats') || 'null') || DEFAULT_CATEGORIES,
+  expenses: JSON.parse(localStorage.getItem('budget_expenses') || '[]'),
+  rules: JSON.parse(localStorage.getItem('budget_rules') || '[]'),
+  filters: JSON.parse(localStorage.getItem('budget_filters') || '[]'),
+  groupOrder: JSON.parse(localStorage.getItem('budget_group_order') || 'null'),
+  sheetUrl: localStorage.getItem('budget_sheet_url') || '',
+  viewPeriod: 'monthly',
+  viewMonth: new Date().getMonth(),
+  viewYear: new Date().getFullYear(),
+  activeFilter: null,
+  csvRows: [],
+  csvHeaders: [],
+  connected: false
+};
+
+// ─── Apps Script Code ────────────────────────────────────────────────
+const APPS_SCRIPT = `function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (data.action === 'addExpense') {
+    var sheet = ss.getSheetByName('Expenses') || ss.insertSheet('Expenses');
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(['Date','Amount','Category','Description','Memo','Who','Added']);
+    }
+    sheet.appendRow([data.date, data.amount, data.category, data.description, data.memo||'', data.who, new Date().toISOString()]);
+    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (data.action === 'replaceExpenses') {
+    var sheet = ss.getSheetByName('Expenses') || ss.insertSheet('Expenses');
+    sheet.clearContents();
+    sheet.appendRow(['Date','Amount','Category','Description','Memo','Who','Added']);
+    (data.expenses||[]).forEach(function(e){
+      sheet.appendRow([e.date, e.amount, e.category, e.description||'', e.memo||'', e.who||'', e.added||'']);
+    });
+    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (data.action === 'saveBudgets') {
+    var bs = ss.getSheetByName('Budgets') || ss.insertSheet('Budgets');
+    bs.clearContents();
+    bs.appendRow(['Group','Name','Budget','Period']);
+    data.categories.forEach(function(c){ bs.appendRow([c.group,c.name,c.budget,c.period]); });
+    // Save group order in a named range / hidden sheet
+    var go = ss.getSheetByName('GroupOrder') || ss.insertSheet('GroupOrder');
+    go.clearContents();
+    (data.groupOrder||[]).forEach(function(g,i){ go.getRange(i+1,1).setValue(g); });
+    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (data.action === 'saveRules') {
+    var rs = ss.getSheetByName('Rules') || ss.insertSheet('Rules');
+    rs.clearContents();
+    rs.appendRow(['Contains','Category']);
+    (data.rules||[]).forEach(function(r){ rs.appendRow([r.contains, r.category]); });
+    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (data.action === 'saveFilters') {
+    var fs = ss.getSheetByName('Filters') || ss.insertSheet('Filters');
+    fs.clearContents();
+    fs.appendRow(['Name','Categories']);
+    (data.filters||[]).forEach(function(f){ fs.appendRow([f.name, (f.categories||[]).join('|')]); });
+    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({ok:false,error:'Unknown action'})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var result = { expenses: [], categories: [], rules: [], filters: [], groupOrder: [] };
+
+  var es = ss.getSheetByName('Expenses');
+  if (es && es.getLastRow() > 1) {
+    var rows = es.getRange(2, 1, es.getLastRow()-1, 6).getValues();
+    result.expenses = rows.map(function(r){ return {date:r[0],amount:r[1],category:r[2],description:r[3],memo:r[4],who:r[5]}; });
+  }
+
+  var bs = ss.getSheetByName('Budgets');
+  if (bs && bs.getLastRow() > 1) {
+    var brows = bs.getRange(2, 1, bs.getLastRow()-1, 4).getValues();
+    result.categories = brows.map(function(r){ return {group:r[0],name:r[1],budget:r[2],period:r[3]}; });
+  }
+
+  var go = ss.getSheetByName('GroupOrder');
+  if (go && go.getLastRow() > 0) {
+    result.groupOrder = go.getRange(1,1,go.getLastRow(),1).getValues().map(function(r){ return r[0]; }).filter(Boolean);
+  }
+
+  var rs = ss.getSheetByName('Rules');
+  if (rs && rs.getLastRow() > 1) {
+    var rrows = rs.getRange(2, 1, rs.getLastRow()-1, 2).getValues();
+    result.rules = rrows.map(function(r){ return {contains:r[0],category:r[1]}; });
+  }
+
+  var fs = ss.getSheetByName('Filters');
+  if (fs && fs.getLastRow() > 1) {
+    var frows = fs.getRange(2, 1, fs.getLastRow()-1, 2).getValues();
+    result.filters = frows.map(function(r){ return {name:r[0], categories: r[1]?r[1].toString().split('|'):[]}; });
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+document.getElementById('apps-script-code').textContent = APPS_SCRIPT;
+
+// ─── Init ────────────────────────────────────────────────────────────
+window.onload = function() {
+  if (state.sheetUrl) {
+    document.getElementById('sheet-url').value = state.sheetUrl;
+    document.getElementById('config-banner').style.display = 'none';
+    fetchFromSheet().catch(() => setConnStatus(false));
+  }
+  setTodayDate();
+  populateCategorySelect();
+  populateMonthPicker();
+  renderDashboard();
+  renderExpenseTable();
+  renderBudgetEditor();
+  renderRulesEditor();
+  renderFiltersEditor();
+  updatePeriodLabel();
+};
+
+function setTodayDate() {
+  const d = new Date();
+  document.getElementById('exp-date').value = d.toISOString().split('T')[0];
+}
+
+function saveSheetUrl() {
+  state.sheetUrl = document.getElementById('sheet-url').value.trim();
+  localStorage.setItem('budget_sheet_url', state.sheetUrl);
+  if (state.sheetUrl) document.getElementById('config-banner').style.display = 'none';
+}
+
+// ─── Sheet API ───────────────────────────────────────────────────────
+async function sheetPost(data) {
+  if (!state.sheetUrl) return { ok: false, error: 'No URL' };
+  // Google Apps Script redirects POST to GET — send as GET with payload in query string
+  // Use no-cors workaround: POST to the URL, accept opaque response as success
+  const res = await fetch(state.sheetUrl, {
+    method: 'POST',
+    redirect: 'follow',
+    body: JSON.stringify(data),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+  });
+  // If we got a response (even a redirect), treat as ok
+  if (res.ok || res.type === 'opaqueredirect') return { ok: true };
+  // Try to parse JSON response
+  try { return await res.json(); } catch { return { ok: true }; }
+}
+
+async function fetchFromSheet() {
+  if (!state.sheetUrl) return;
+  const url = state.sheetUrl + (state.sheetUrl.includes('?') ? '&' : '?') + '_=' + Date.now();
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch(e) { throw new Error('Bad JSON response'); }
+  if (data.expenses) {
+    state.expenses = data.expenses.map(e => ({
+      ...e,
+      date: e.date ? new Date(e.date).toISOString().split('T')[0] : '',
+      amount: parseFloat(e.amount) || 0
+    }));
+    localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  }
+  if (data.categories && data.categories.length > 0) {
+    state.categories = data.categories;
+    localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+  }
+  if (data.groupOrder && data.groupOrder.length > 0) {
+    state.groupOrder = data.groupOrder;
+    localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+  }
+  if (data.rules) {
+    state.rules = data.rules;
+    localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+  }
+  if (data.filters) {
+    state.filters = data.filters;
+    localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+  }
+  state.connected = true;
+  setConnStatus(true);
+  renderDashboard();
+  renderExpenseTable();
+  renderBudgetEditor();
+  renderRulesEditor();
+  renderFiltersEditor();
+  populateCategorySelect();
+}
+
+function setConnStatus(ok) {
+  const el = document.getElementById('conn-indicator');
+  el.className = 'conn-status ' + (ok ? 'connected' : 'disconnected');
+  el.innerHTML = `<span class="dot"></span> ${ok ? 'Connected to Google Sheets' : 'Not connected'}`;
+}
+
+async function testConnection() {
+  const msg = document.getElementById('conn-status-msg');
+  msg.className = 'status-msg'; msg.textContent = 'Testing...'; msg.style.display = 'block';
+  try {
+    await fetchFromSheet();
+    msg.className = 'status-msg success'; msg.textContent = '✓ Connected! Data synced from your sheet.';
+  } catch(e) {
+    setConnStatus(false);
+    msg.className = 'status-msg error'; msg.textContent = '✗ Could not connect. Check the URL and make sure "Who has access" is set to Anyone.';
+  }
+}
+
+
+// ─── Tabs ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ─── Period ──────────────────────────────────────────────────────────
+function setPeriod(p) {
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  state.viewPeriod = p;
+  const picker = document.getElementById('month-picker');
+  picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  updatePeriodLabel();
+  renderDashboard();
+}
+
+function setCustomMonth(val) {
+  const [y, m] = val.split('-').map(Number);
+  state.viewYear = y; state.viewMonth = m - 1;
+  updatePeriodLabel();
+  renderDashboard();
+}
+
+function updatePeriodLabel() {
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  let label = '';
+  if (state.viewPeriod === 'monthly') {
+    state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear();
+    label = months[now.getMonth()] + ' ' + now.getFullYear();
+  } else if (state.viewPeriod === 'yearly') {
+    label = 'Full year ' + now.getFullYear();
+  } else if (state.viewPeriod === 'ytd') {
+    label = 'January – ' + months[now.getMonth()] + ' ' + now.getFullYear();
+  } else {
+    label = months[state.viewMonth] + ' ' + state.viewYear;
+  }
+  document.getElementById('period-label').textContent = label;
+}
+
+function populateMonthPicker() {
+  const sel = document.getElementById('month-picker');
+  const now = new Date();
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleString('default', {month:'long', year:'numeric'});
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    sel.appendChild(opt);
+  }
+}
+
+// ─── Filter expenses by period ───────────────────────────────────────
+function getFilteredExpenses() {
+  const now = new Date();
+  return state.expenses.filter(e => {
+    if (!e.date) return false;
+    const d = new Date(e.date + 'T12:00:00');
+    if (state.viewPeriod === 'monthly') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if (state.viewPeriod === 'yearly') return d.getFullYear() === now.getFullYear();
+    if (state.viewPeriod === 'ytd') return d.getFullYear() === now.getFullYear() && d <= now;
+    if (state.viewPeriod === 'custom') return d.getMonth() === state.viewMonth && d.getFullYear() === state.viewYear;
+    return true;
+  });
+}
+
+function getBudgetForPeriod(cat) {
+  const b = parseFloat(cat.budget) || 0;
+  const now = new Date();
+  if (state.viewPeriod === 'yearly') return cat.period === 'yearly' ? b : b * 12;
+  if (state.viewPeriod === 'ytd') {
+    // months elapsed so far this year (partial current month counts as full)
+    const monthsElapsed = now.getMonth() + 1;
+    return cat.period === 'yearly' ? (b / 12) * monthsElapsed : b * monthsElapsed;
+  }
+  if (state.viewPeriod === 'monthly' || state.viewPeriod === 'custom') return cat.period === 'yearly' ? b / 12 : b;
+  return b;
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────
+function renderFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  if (!bar) return;
+  let html = `<button class="filter-chip ${!state.activeFilter ? 'active' : ''}" onclick="setFilter(null)">All</button>`;
+  state.filters.forEach(f => {
+    html += `<button class="filter-chip ${state.activeFilter === f.name ? 'active' : ''}" onclick="setFilter('${escHtml(f.name)}')">${escHtml(f.name)}</button>`;
+  });
+  bar.innerHTML = html;
+}
+
+function setFilter(name) {
+  state.activeFilter = name;
+  renderFilterBar();
+  renderDashboard();
+}
+
+function getVisibleCategories() {
+  if (!state.activeFilter) return state.categories;
+  const f = state.filters.find(f => f.name === state.activeFilter);
+  if (!f) return state.categories;
+  return state.categories.filter(c => f.categories.includes(c.name));
+}
+
+function renderDashboard() {
+  renderFilterBar();
+  const filtered = getFilteredExpenses();
+  const visibleCats = getVisibleCategories();
+
+  // For YTD: also get this-month expenses for per-category monthly comparison
+  const now = new Date();
+  const thisMonthExpenses = state.viewPeriod === 'ytd'
+    ? state.expenses.filter(e => { if (!e.date) return false; const d = new Date(e.date+'T12:00:00'); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); })
+    : null;
+
+  const totalSpent = filtered.filter(e => visibleCats.some(c=>c.name===e.category)).reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
+  const totalBudget = visibleCats.reduce((s,c) => s+getBudgetForPeriod(c), 0);
+  const remain = totalBudget - totalSpent;
+
+  const cards = document.getElementById('summary-cards');
+  const monthsElapsed = now.getMonth() + 1;
+  const ytdNote = state.viewPeriod === 'ytd' ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;">${monthsElapsed} months</div>` : '';
+  cards.innerHTML = `
+    <div class="summary-card"><div class="label">Budget</div><div class="value">$${fmt(totalBudget)}</div>${ytdNote}</div>
+    <div class="summary-card"><div class="label">Spent</div><div class="value ${totalSpent > totalBudget ? 'red' : ''}">$${fmt(totalSpent)}</div>${ytdNote}</div>
+    <div class="summary-card"><div class="label">Remaining</div><div class="value ${remain < 0 ? 'red' : 'green'}">$${fmt(Math.abs(remain))}${remain < 0 ? ' over' : ''}</div></div>
+    <div class="summary-card"><div class="label">Transactions</div><div class="value">${filtered.filter(e=>visibleCats.some(c=>c.name===e.category)).length}</div></div>
+  `;
+
+  const groups = {};
+  visibleCats.forEach(c => {
+    if (!groups[c.group]) groups[c.group] = [];
+    const spent = filtered.filter(e => e.category === c.name).reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
+    const budget = getBudgetForPeriod(c);
+
+    // YTD: compute this month's spend vs monthly budget for context
+    let ytdContext = null;
+    if (state.viewPeriod === 'ytd' && thisMonthExpenses) {
+      const monthSpent = thisMonthExpenses.filter(e=>e.category===c.name).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+      const monthBudget = c.period === 'yearly' ? (parseFloat(c.budget)||0)/12 : (parseFloat(c.budget)||0);
+      const ytdAvgMonthly = monthsElapsed > 0 ? spent / monthsElapsed : 0;
+      ytdContext = { monthSpent, monthBudget, ytdAvgMonthly };
+    }
+
+    groups[c.group].push({ ...c, spent, budget, ytdContext });
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([grp, cats]) => {
+    html += `<div class="group"><div class="group-header">${grp}</div>`;
+    cats.forEach(c => {
+      const pct = c.budget > 0 ? Math.min((c.spent / c.budget) * 100, 100) : 0;
+      const cls = pct >= 100 ? 'over' : pct >= 85 ? 'warn' : 'ok';
+      const remain = c.budget - c.spent;
+
+      let ytdHtml = '';
+      if (c.ytdContext) {
+        const { monthSpent, monthBudget, ytdAvgMonthly } = c.ytdContext;
+        const thisMonthOver = monthBudget > 0 && monthSpent > monthBudget;
+        const avgVsBudget = monthBudget > 0 ? ytdAvgMonthly / monthBudget : 0;
+        const trendCls = avgVsBudget > 1 ? 'ytd-over' : 'ytd-ok';
+        const trendLabel = avgVsBudget > 1
+          ? `avg $${fmt(ytdAvgMonthly)}/mo — over budget`
+          : `avg $${fmt(ytdAvgMonthly)}/mo — on track`;
+        ytdHtml = `<div class="cat-ytd"><span class="${trendCls}">${trendLabel}</span>${thisMonthOver ? ' · <span style="color:var(--warn)">this month over</span>' : ''}</div>`;
+      }
+
+      html += `<div class="cat-row">
+        <div class="cat-name">${c.name}<div class="sub">${c.period}</div>${ytdHtml}</div>
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
+          <div class="progress-pct">${Math.round(pct)}%</div>
+        </div>
+        <div class="cat-budget">$${fmt(c.budget)}</div>
+        <div class="cat-spent">$${fmt(c.spent)}</div>
+        <div class="cat-remain ${remain < 0 ? 'neg' : 'pos'}">$${fmt(Math.abs(remain))}${remain < 0 ? ' over' : ''}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  document.getElementById('categories-view').innerHTML = html || '<div class="empty-state"><div class="icon">📊</div><p>No categories yet — add some in Budget.</p></div>';
+}
+
+// ─── Expense Table ───────────────────────────────────────────────────
+function renderExpenseTable() {
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const rows = [...state.expenses]
+    .filter(e => !q || (e.description||'').toLowerCase().includes(q) || (e.category||'').toLowerCase().includes(q))
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  if (!rows.length) {
+    document.getElementById('expense-table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>No expenses yet.</p></div>';
+    return;
+  }
+  let html = `<table class="expense-table"><thead><tr><th>Date</th><th>Description</th><th>Memo</th><th>Category</th><th>Who</th><th style="text-align:right">Amount</th><th></th></tr></thead><tbody>`;
+  rows.forEach((e, i) => {
+    const idx = state.expenses.indexOf(e);
+    html += `<tr>
+      <td class="text-muted">${e.date||''}</td>
+      <td>${e.description||''}</td>
+      <td class="text-muted" style="font-size:13px;">${e.memo||''}</td>
+      <td><span class="badge">${e.category||''}</span></td>
+      <td class="text-muted">${e.who||''}</td>
+      <td style="text-align:right; font-weight:500;">$${fmt(e.amount)}</td>
+      <td><button class="del-btn" onclick="deleteExpense(${idx})">✕</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('expense-table-wrap').innerHTML = html;
+}
+
+async function deleteExpense(idx) {
+  if (!confirm('Delete this expense?')) return;
+  state.expenses.splice(idx, 1);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderExpenseTable();
+  renderDashboard();
+  if (state.sheetUrl) {
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
+      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
+    } catch { /* silent — local state is correct, sheet will resync on next load */ }
+  }
+}
+
+// ─── Add Expense ─────────────────────────────────────────────────────
+function populateCategorySelect() {
+  const sel = document.getElementById('exp-cat');
+  sel.innerHTML = state.categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+}
+
+async function addExpense() {
+  const date = document.getElementById('exp-date').value;
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const category = document.getElementById('exp-cat').value;
+  const description = document.getElementById('exp-desc').value.trim();
+  const memo = document.getElementById('exp-memo').value.trim();
+  const who = document.getElementById('exp-who').value;
+  const msg = document.getElementById('add-status');
+
+  if (!date || isNaN(amount) || amount <= 0 || !category) {
+    msg.className = 'status-msg error'; msg.textContent = 'Please fill in date, amount, and category.'; return;
+  }
+
+  const exp = { date, amount, category, description, memo, who };
+  state.expenses.push(exp);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderDashboard(); renderExpenseTable();
+
+  msg.className = 'status-msg'; msg.textContent = 'Saving to Google Sheets...'; msg.style.display = 'block';
+  if (state.sheetUrl) {
+    try {
+      const res = await sheetPost({ action: 'addExpense', ...exp });
+      if (res.ok) { msg.className = 'status-msg success'; msg.textContent = '✓ Saved to Google Sheets!'; }
+      else throw new Error();
+    } catch { msg.className = 'status-msg error'; msg.textContent = '✗ Saved locally but could not sync to Sheets. Check your connection.'; }
+  } else {
+    msg.className = 'status-msg success'; msg.textContent = '✓ Saved locally. Connect Google Sheets in Settings to sync.';
+  }
+  setTimeout(() => { msg.style.display = 'none'; }, 4000);
+  clearForm();
+}
+
+function clearForm() {
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-memo').value = '';
+  setTodayDate();
+}
+
+// ─── CSV Import ──────────────────────────────────────────────────────
+function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
+function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); parseCSV(e.dataTransfer.files[0]); }
+function handleCSVFile(e) { parseCSV(e.target.files[0]); }
+function cancelCSV() { document.getElementById('csv-preview').style.display = 'none'; state.csvRows = []; state.csvHeaders = []; }
+
+function parseCSV(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    state.csvHeaders = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+    state.csvRows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
+    showCSVMapper();
+  };
+  reader.readAsText(file);
+}
+
+function showCSVMapper() {
+  document.getElementById('csv-preview').style.display = 'block';
+  const fields = ['Date column', 'Amount column', 'Description column'];
+  const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
+  let html = '';
+  ids.forEach((id, i) => {
+    html += `<div>
+      <label class="field-label" style="font-size:11px;">${fields[i]}</label>
+      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+        ${state.csvHeaders.map((h,j) => `<option value="${j}">${h}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+  html += `<div>
+    <label class="field-label" style="font-size:11px;">Category (assign all)</label>
+    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      ${state.categories.map(c=>`<option value="${c.name}">${c.name}</option>`).join('')}
+    </select>
+  </div>`;
+  document.getElementById('csv-map-grid').innerHTML = html;
+
+  // Auto-detect common column names
+  const lower = state.csvHeaders.map(h => h.toLowerCase());
+  const guess = (words) => { const i = lower.findIndex(h => words.some(w => h.includes(w))); return i >= 0 ? i : 0; };
+  document.getElementById('csv-date-col').value = guess(['date','time']);
+  document.getElementById('csv-amount-col').value = guess(['amount','debit','charge','sum']);
+  document.getElementById('csv-desc-col').value = guess(['desc','memo','narr','payee','merchant','name']);
+
+  const preview = state.csvRows.slice(0,5);
+  let t = `<table class="expense-table"><thead><tr>${state.csvHeaders.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+  preview.forEach(r => { t += `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
+  t += '</tbody></table>';
+  document.getElementById('csv-preview-table').innerHTML = t;
+}
+
+async function importCSV() {
+  const di = parseInt(document.getElementById('csv-date-col').value);
+  const ai = parseInt(document.getElementById('csv-amount-col').value);
+  const dci = parseInt(document.getElementById('csv-desc-col').value);
+  const cat = document.getElementById('csv-cat-col').value;
+  const msg = document.getElementById('csv-status');
+
+  let added = 0, autoCat = 0;
+  for (const row of state.csvRows) {
+    const rawAmt = (row[ai]||'').replace(/[$,()]/g,'').trim();
+    const amount = Math.abs(parseFloat(rawAmt));
+    if (isNaN(amount) || amount === 0) continue;
+    const dateRaw = row[di]||'';
+    let date = '';
+    try { const d = new Date(dateRaw); if (!isNaN(d)) date = d.toISOString().split('T')[0]; } catch{}
+    if (!date) date = dateRaw;
+    const description = row[dci]||'';
+    const ruleMatch = applyRules(description);
+    if (ruleMatch) autoCat++;
+    const category = ruleMatch || cat;
+    const exp = { date, amount, category, description, memo: '', who: 'Import' };
+    state.expenses.push(exp);
+    if (state.sheetUrl) { try { await sheetPost({ action: 'addExpense', ...exp }); } catch{} }
+    added++;
+  }
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  const autoMsg = autoCat > 0 ? ` (${autoCat} auto-categorized by rules)` : '';
+  msg.className = 'status-msg success'; msg.textContent = `✓ Imported ${added} transactions${autoMsg}.`;
+  renderDashboard(); renderExpenseTable();
+  setTimeout(() => { cancelCSV(); }, 2500);
+}
+
+// ─── Budget Editor (grouped, drag-and-drop) ──────────────────────────
+let dragSrc = null; // { type:'item'|'group', groupName, catIndex }
+
+function getGroups() {
+  const order = state.groupOrder || [];
+  const seen = new Set();
+  const groups = [];
+  // First pass: ordered groups
+  order.forEach(g => {
+    if (!seen.has(g)) { seen.add(g); groups.push(g); }
+  });
+  // Second pass: any groups in categories not yet in order
+  state.categories.forEach(c => {
+    if (!seen.has(c.group)) { seen.add(c.group); groups.push(c.group); }
+  });
+  return groups;
+}
+
+function renderBudgetEditor() {
+  const el = document.getElementById('budget-editor');
+  if (!el) return;
+  const groups = getGroups();
+  let html = '';
+  groups.forEach(grp => {
+    const cats = state.categories.map((c,i) => ({...c, _i: i})).filter(c => c.group === grp);
+    html += `<div class="budget-group-block" data-group="${escHtml(grp)}" 
+      draggable="true"
+      ondragstart="onGroupDragStart(event,'${escHtml(grp)}')"
+      ondragover="onGroupDragOver(event)"
+      ondragleave="onGroupDragLeave(event)"
+      ondrop="onGroupDrop(event,'${escHtml(grp)}')"
+      ondragend="onDragEnd(event)">
+      <div class="budget-group-header">
+        <span class="drag-handle" title="Drag to reorder group">⠿</span>
+        <input class="budget-group-name-input" type="text" value="${escHtml(grp)}"
+          onchange="renameGroup('${escHtml(grp)}',this.value)"
+          onclick="event.stopPropagation()"
+          placeholder="Group name">
+        <button class="group-del-btn" onclick="deleteGroup('${escHtml(grp)}')">Remove group</button>
+      </div>
+      <div class="budget-group-body" data-group="${escHtml(grp)}">`;
+    cats.forEach(c => {
+      html += `<div class="budget-item-row" data-cat-index="${c._i}" data-group="${escHtml(grp)}"
+          draggable="true"
+          ondragstart="onItemDragStart(event,${c._i})"
+          ondragover="onItemDragOver(event)"
+          ondragleave="onItemDragLeave(event)"
+          ondrop="onItemDrop(event,${c._i},'${escHtml(grp)}')"
+          ondragend="onDragEnd(event)">
+        <span class="item-drag-handle" title="Drag to reorder">⠿</span>
+        <input type="text" value="${escHtml(c.name)}" onchange="updateCat(${c._i},'name',this.value)" placeholder="Category name">
+        <input type="number" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00" step="0.01" min="0">
+        <select class="period-sel" onchange="updateCat(${c._i},'period',this.value)">
+          <option value="monthly" ${c.period==='monthly'?'selected':''}>Monthly</option>
+          <option value="yearly" ${c.period==='yearly'?'selected':''}>Yearly</option>
+        </select>
+        <button class="del-btn" onclick="removeCat(${c._i})">✕</button>
+      </div>`;
+    });
+    html += `</div>
+      <button class="group-add-btn" onclick="addCategoryToGroup('${escHtml(grp)}')">+ Add item to ${escHtml(grp)}</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function updateCat(i, key, val) {
+  state.categories[i][key] = key === 'budget' ? parseFloat(val)||0 : val;
+}
+function removeCat(i) {
+  if (!confirm('Remove this budget item?')) return;
+  state.categories.splice(i, 1);
+  renderBudgetEditor();
+}
+function addCategoryToGroup(grp) {
+  state.categories.push({ group: grp, name: '', budget: 0, period: 'monthly' });
+  renderBudgetEditor();
+  // Focus the new row's name input
+  setTimeout(() => {
+    const rows = document.querySelectorAll(`[data-group="${grp}"] .budget-item-row`);
+    const last = rows[rows.length - 1];
+    last?.querySelector('input[type=text]')?.focus();
+  }, 30);
+}
+function addCategoryRow() { addCategoryToGroup(getGroups()[0] || 'Other'); }
+function addGroupBlock() {
+  const name = 'New Group';
+  if (!state.groupOrder) state.groupOrder = getGroups();
+  state.groupOrder.push(name);
+  state.categories.push({ group: name, name: '', budget: 0, period: 'monthly' });
+  renderBudgetEditor();
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.budget-group-name-input');
+    inputs[inputs.length-1]?.focus();
+    inputs[inputs.length-1]?.select();
+  }, 30);
+}
+function renameGroup(oldName, newName) {
+  if (!newName.trim() || newName === oldName) return;
+  state.categories.forEach(c => { if (c.group === oldName) c.group = newName; });
+  if (state.groupOrder) {
+    state.groupOrder = state.groupOrder.map(g => g === oldName ? newName : g);
+  }
+  // Update filter references too
+  state.filters.forEach(f => {
+    if (f.categories) f.categories = f.categories; // categories use cat names not group names, so no change needed
+  });
+}
+function deleteGroup(grp) {
+  const count = state.categories.filter(c => c.group === grp).length;
+  if (count > 0 && !confirm(`Remove the "${grp}" group and its ${count} item${count!==1?'s':''}?`)) return;
+  state.categories = state.categories.filter(c => c.group !== grp);
+  if (state.groupOrder) state.groupOrder = state.groupOrder.filter(g => g !== grp);
+  renderBudgetEditor();
+}
+
+// ─── Drag and Drop ───────────────────────────────────────────────────
+function onGroupDragStart(e, grp) {
+  dragSrc = { type: 'group', groupName: grp };
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.style.opacity = '0.4';
+}
+function onGroupDragOver(e) {
+  if (!dragSrc || dragSrc.type !== 'group') return;
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over-group');
+}
+function onGroupDragLeave(e) { e.currentTarget.classList.remove('drag-over-group'); }
+function onGroupDrop(e, targetGrp) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-group');
+  if (!dragSrc || dragSrc.type !== 'group' || dragSrc.groupName === targetGrp) return;
+  const groups = getGroups();
+  const fromIdx = groups.indexOf(dragSrc.groupName);
+  const toIdx = groups.indexOf(targetGrp);
+  if (fromIdx < 0 || toIdx < 0) return;
+  groups.splice(fromIdx, 1);
+  groups.splice(toIdx, 0, dragSrc.groupName);
+  state.groupOrder = groups;
+  // Reorder categories array to match
+  const reordered = [];
+  groups.forEach(g => reordered.push(...state.categories.filter(c => c.group === g)));
+  state.categories = reordered;
+  renderBudgetEditor();
+}
+function onItemDragStart(e, catIdx) {
+  dragSrc = { type: 'item', catIndex: catIdx };
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation();
+  e.currentTarget.classList.add('dragging');
+}
+function onItemDragOver(e) {
+  if (!dragSrc || dragSrc.type !== 'item') return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.add('drag-over-item');
+}
+function onItemDragLeave(e) { e.currentTarget.classList.remove('drag-over-item'); }
+function onItemDrop(e, targetIdx, targetGrp) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove('drag-over-item');
+  if (!dragSrc || dragSrc.type !== 'item') return;
+  const fromIdx = dragSrc.catIndex;
+  if (fromIdx === targetIdx) return;
+  const item = state.categories.splice(fromIdx, 1)[0];
+  item.group = targetGrp; // allow dropping into a different group
+  const newTarget = fromIdx < targetIdx ? targetIdx - 1 : targetIdx;
+  state.categories.splice(newTarget, 0, item);
+  renderBudgetEditor();
+}
+function onDragEnd(e) {
+  e.currentTarget.style.opacity = '';
+  document.querySelectorAll('.drag-over-group,.drag-over-item,.dragging').forEach(el => {
+    el.classList.remove('drag-over-group','drag-over-item','dragging');
+  });
+  dragSrc = null;
+}
+
+async function saveBudgets() {
+  state.groupOrder = getGroups();
+  localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+  localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+  populateCategorySelect();
+  renderDashboard();
+  const msg = document.getElementById('budget-status');
+  msg.style.display = 'block';
+  if (state.sheetUrl) {
+    msg.className = 'status-msg'; msg.textContent = 'Saving...';
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+      const save = sheetPost({ action: 'saveBudgets', categories: state.categories, groupOrder: state.groupOrder });
+      await Promise.race([save, timeout]);
+      msg.className = 'status-msg success'; msg.textContent = '✓ Budgets saved!';
+    } catch {
+      msg.className = 'status-msg success'; msg.textContent = '✓ Saved locally (sheet sync may still be processing).';
+    }
+  } else {
+    msg.className = 'status-msg success'; msg.textContent = '✓ Budgets saved locally.';
+  }
+  setTimeout(() => { msg.style.display = 'none'; }, 3500);
+}
+
+// ─── Rules ───────────────────────────────────────────────────────────
+function renderRulesEditor() {
+  const el = document.getElementById('rules-editor');
+  if (!el) return;
+  if (!state.rules.length) {
+    el.innerHTML = '<p style="font-size:13px; color:var(--muted); padding:8px 0 4px;">No rules yet — add one below.</p>';
+    return;
+  }
+  let html = '';
+  state.rules.forEach((r, i) => {
+    html += `<div style="display:grid; grid-template-columns:1fr 1fr 36px; gap:8px; margin-bottom:6px;" id="rule-row-${i}">
+      <input type="text" value="${escHtml(r.contains)}" onchange="updateRule(${i},'contains',this.value)" placeholder="e.g. KROGER">
+      <select onchange="updateRule(${i},'category',this.value)">
+        ${state.categories.map(c => `<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.name}</option>`).join('')}
+      </select>
+      <button class="del-btn" onclick="removeRule(${i})" style="display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function updateRule(i, key, val) { state.rules[i][key] = val; }
+function removeRule(i) { state.rules.splice(i, 1); renderRulesEditor(); }
+function addRuleRow() {
+  const defaultCat = state.categories[0]?.name || '';
+  state.rules.push({ contains: '', category: defaultCat });
+  renderRulesEditor();
+  setTimeout(() => document.querySelector(`#rule-row-${state.rules.length-1} input`)?.focus(), 50);
+}
+
+async function saveRules() {
+  localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+  const msg = document.getElementById('rules-status');
+  msg.style.display = 'block';
+  if (state.sheetUrl) {
+    msg.className = 'status-msg'; msg.textContent = 'Saving...';
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
+      await Promise.race([sheetPost({ action: 'saveRules', rules: state.rules }), timeout]);
+      msg.className = 'status-msg success'; msg.textContent = `✓ ${state.rules.length} rule${state.rules.length!==1?'s':''} saved to Google Sheets!`;
+    } catch {
+      msg.className = 'status-msg success'; msg.textContent = `✓ ${state.rules.length} rule${state.rules.length!==1?'s':''} saved locally.`;
+    }
+  } else {
+    msg.className = 'status-msg success'; msg.textContent = `✓ ${state.rules.length} rule${state.rules.length!==1?'s':''} saved locally.`;
+  }
+  setTimeout(() => { msg.style.display = 'none'; }, 3500);
+}
+
+// ─── Filters ─────────────────────────────────────────────────────────
+function renderFiltersEditor() {
+  const el = document.getElementById('filters-editor');
+  if (!el) return;
+  if (!state.filters.length) {
+    el.innerHTML = '<p style="font-size:13px; color:var(--muted); padding:4px 0 4px;">No filters yet. Add one below.</p>';
+    return;
+  }
+  let html = '';
+  state.filters.forEach((f, fi) => {
+    html += `<div class="filter-editor-row">
+      <h4>
+        <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)" placeholder="Filter name (e.g. Michelle)" style="font-size:13px;font-weight:500;border:none;background:none;padding:0;width:200px;outline:none;color:var(--text);">
+        <button class="del-btn" onclick="removeFilter(${fi})">✕ Remove</button>
+      </h4>
+      <div class="filter-cat-grid">
+        ${state.categories.map(c => `
+          <label class="filter-cat-check">
+            <input type="checkbox" ${(f.categories||[]).includes(c.name)?'checked':''} onchange="toggleFilterCat(${fi},'${escHtml(c.name)}',this.checked)">
+            <span>${escHtml(c.name)}</span>
+          </label>`).join('')}
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function updateFilterName(i, val) { state.filters[i].name = val; }
+function removeFilter(i) {
+  if (state.activeFilter === state.filters[i].name) state.activeFilter = null;
+  state.filters.splice(i, 1);
+  renderFiltersEditor();
+}
+function toggleFilterCat(fi, catName, checked) {
+  if (!state.filters[fi].categories) state.filters[fi].categories = [];
+  if (checked) { if (!state.filters[fi].categories.includes(catName)) state.filters[fi].categories.push(catName); }
+  else { state.filters[fi].categories = state.filters[fi].categories.filter(c => c !== catName); }
+}
+function addFilterRow() {
+  state.filters.push({ name: '', categories: [] });
+  renderFiltersEditor();
+  setTimeout(() => document.querySelector(`#filters-editor .filter-editor-row:last-child input[type=text]`)?.focus(), 50);
+}
+async function saveFilters() {
+  localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+  const msg = document.getElementById('filters-status');
+  msg.style.display = 'block';
+  if (state.sheetUrl) {
+    msg.className = 'status-msg'; msg.textContent = 'Saving...';
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
+      await Promise.race([sheetPost({ action: 'saveFilters', filters: state.filters }), timeout]);
+      msg.className = 'status-msg success'; msg.textContent = '✓ Filters saved to Google Sheets!';
+    } catch {
+      msg.className = 'status-msg success'; msg.textContent = '✓ Filters saved locally.';
+    }
+  } else {
+    msg.className = 'status-msg success'; msg.textContent = '✓ Filters saved locally.';
+  }
+  renderFilterBar();
+  setTimeout(() => { msg.style.display = 'none'; }, 3500);
+}
+
+function applyRules(description) {
+  if (!description || !state.rules.length) return null;
+  const lower = description.toLowerCase();
+  for (const rule of state.rules) {
+    if (rule.contains && lower.includes(rule.contains.toLowerCase())) return rule.category;
+  }
+  return null;
+}
+
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+
+function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+</script>
+</body>
+</html>
