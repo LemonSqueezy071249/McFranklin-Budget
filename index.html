@@ -279,10 +279,26 @@
 
   <!-- EXPENSES -->
   <div id="tab-expenses" class="panel">
-    <div class="flex items-center justify-between mb-1" style="margin-bottom:1rem;">
-      <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400;">All Expenses</h2>
-      <input type="text" id="search-input" placeholder="Search..." style="width:200px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
+    <div style="margin-bottom:1.25rem;">
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;">
+        <div class="period-toggle" id="exp-period-toggle">
+          <label>Period:</label>
+          <button class="toggle-btn active" onclick="setExpPeriod('monthly',event)">This month</button>
+          <button class="toggle-btn" onclick="setExpPeriod('ytd',event)">Year to date</button>
+          <button class="toggle-btn" onclick="setExpPeriod('yearly',event)">Full year</button>
+          <button class="toggle-btn" onclick="setExpPeriod('all',event)">All</button>
+          <button class="toggle-btn" onclick="setExpPeriod('custom',event)">Custom</button>
+          <select id="exp-month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setExpCustomMonth(this.value)"></select>
+        </div>
+        <input type="text" id="search-input" placeholder="Search..." style="width:180px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+        <button class="filter-chip active" id="exp-filter-all" onclick="setExpFilter(null,event)">All</button>
+        <button class="filter-chip" id="exp-filter-uncategorized" onclick="setExpFilter('__uncategorized__',event)" style="border-color:#E09A2A; color:#B7610A;">⚑ Uncategorized</button>
+        <span id="exp-filter-chips"></span>
+      </div>
     </div>
+    <div id="exp-count" style="font-size:13px; color:var(--muted); margin-bottom:8px;"></div>
     <div id="expense-table-wrap"></div>
   </div>
 
@@ -330,7 +346,7 @@
     <!-- CSV Import -->
     <div class="form-card">
       <h2>Import from CSV</h2>
-      <p class="text-sm text-muted" style="margin-bottom:1rem;">Export transactions from your bank as CSV, then upload here. We'll try to auto-detect columns.</p>
+      <p class="text-sm text-muted" style="margin-bottom:1rem;">Export transactions from your bank as CSV, then upload here. Rules will auto-categorize what they can — the rest goes to Uncategorized for you to sort.</p>
       <div class="import-area" id="drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
         <div class="icon">📂</div>
         <p>Click to choose a CSV file, or drag and drop</p>
@@ -338,15 +354,21 @@
       </div>
       <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSVFile(event)">
       <div id="csv-preview" style="margin-top:1.5rem; display:none;">
-        <h3 style="font-size:14px; font-weight:500; margin-bottom:0.75rem;">Map CSV columns</h3>
+        <h3 style="font-size:14px; font-weight:500; margin-bottom:0.75rem;">Map columns</h3>
         <div id="csv-map-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:1rem; font-size:13px;"></div>
-        <div id="csv-preview-table" style="overflow-x:auto; max-height:220px; overflow-y:auto;"></div>
-        <div style="margin-top:1rem; display:flex; gap:8px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <span style="font-size:13px; font-weight:500;" id="csv-row-count"></span>
+          <span style="font-size:12px; color:var(--muted);">Scroll to see all rows</span>
+        </div>
+        <div id="csv-preview-table" style="overflow-x:auto; max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius);"></div>
+        <div style="margin-top:1rem; display:flex; gap:8px; align-items:center;">
           <button class="btn btn-primary" onclick="importCSV()">Import Rows</button>
           <button class="btn btn-secondary" onclick="cancelCSV()">Cancel</button>
+          <span id="csv-progress" style="font-size:13px; color:var(--muted); display:none;">Importing…</span>
         </div>
         <div id="csv-status" class="status-msg"></div>
       </div>
+      <div id="csv-success" style="display:none; margin-top:1rem;"></div>
     </div>
   </div>
 
@@ -480,6 +502,10 @@ let state = {
   viewMonth: new Date().getMonth(),
   viewYear: new Date().getFullYear(),
   activeFilter: null,
+  expPeriod: 'monthly',
+  expMonth: new Date().getMonth(),
+  expYear: new Date().getFullYear(),
+  expFilter: null,
   csvRows: [],
   csvHeaders: [],
   connected: false
@@ -588,8 +614,10 @@ window.onload = function() {
   setTodayDate();
   populateCategorySelect();
   populateMonthPicker();
+  populateExpMonthPicker();
   renderDashboard();
   renderExpenseTable();
+  renderExpFilterChips();
   renderBudgetEditor();
   renderRulesEditor();
   renderFiltersEditor();
@@ -660,6 +688,7 @@ async function fetchFromSheet() {
   setConnStatus(true);
   renderDashboard();
   renderExpenseTable();
+  renderExpFilterChips();
   renderBudgetEditor();
   renderRulesEditor();
   renderFiltersEditor();
@@ -739,6 +768,76 @@ function populateMonthPicker() {
     opt.value = val; opt.textContent = label;
     sel.appendChild(opt);
   }
+}
+
+function populateExpMonthPicker() {
+  const sel = document.getElementById('exp-month-picker');
+  if (!sel) return;
+  const now = new Date();
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleString('default', {month:'long', year:'numeric'});
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    sel.appendChild(opt);
+  }
+}
+
+function setExpPeriod(p, e) {
+  document.querySelectorAll('#exp-period-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
+  e.currentTarget.classList.add('active');
+  state.expPeriod = p;
+  const picker = document.getElementById('exp-month-picker');
+  picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  renderExpenseTable();
+}
+
+function setExpCustomMonth(val) {
+  const [y, m] = val.split('-').map(Number);
+  state.expYear = y; state.expMonth = m - 1;
+  renderExpenseTable();
+}
+
+function setExpFilter(name, e) {
+  state.expFilter = name;
+  // Update chip active states
+  document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
+    .forEach(b => b.classList.remove('active'));
+  e.currentTarget.classList.add('active');
+  renderExpenseTable();
+}
+
+function renderExpFilterChips() {
+  const el = document.getElementById('exp-filter-chips');
+  if (!el) return;
+  el.innerHTML = state.filters.map(f =>
+    `<button class="filter-chip ${state.expFilter===f.name?'active':''}" onclick="setExpFilter('${escHtml(f.name)}',event)">${escHtml(f.name)}</button>`
+  ).join('');
+}
+
+function getExpFilteredExpenses() {
+  const now = new Date();
+  const knownCats = new Set(state.categories.map(c => c.name));
+  return state.expenses.filter(e => {
+    // Period filter
+    if (e.date) {
+      const d = new Date(e.date + 'T12:00:00');
+      if (state.expPeriod === 'monthly' && !(d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear())) return false;
+      if (state.expPeriod === 'ytd' && !(d.getFullYear()===now.getFullYear()&&d<=now)) return false;
+      if (state.expPeriod === 'yearly' && d.getFullYear()!==now.getFullYear()) return false;
+      if (state.expPeriod === 'custom' && !(d.getMonth()===state.expMonth&&d.getFullYear()===state.expYear)) return false;
+    }
+    // Category filter
+    if (state.expFilter === '__uncategorized__') {
+      return !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
+    }
+    if (state.expFilter) {
+      const f = state.filters.find(f => f.name === state.expFilter);
+      if (f && !f.categories.includes(e.category)) return false;
+    }
+    return true;
+  });
 }
 
 // ─── Filter expenses by period ───────────────────────────────────────
@@ -873,24 +972,34 @@ function renderDashboard() {
 
 // ─── Expense Table ───────────────────────────────────────────────────
 function renderExpenseTable() {
+  renderExpFilterChips();
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-  const rows = [...state.expenses]
+  const periodRows = getExpFilteredExpenses();
+  const rows = [...periodRows]
     .filter(e => !q || (e.description||'').toLowerCase().includes(q) || (e.category||'').toLowerCase().includes(q) || (e.memo||'').toLowerCase().includes(q))
     .sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
+  const countEl = document.getElementById('exp-count');
+  const totalAmt = rows.reduce((s,e) => s + (parseFloat(e.amount)||0), 0);
+  if (countEl) countEl.textContent = `${rows.length} transaction${rows.length!==1?'s':''} · $${fmt(totalAmt)} total`;
+
   if (!rows.length) {
-    document.getElementById('expense-table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>No expenses yet.</p></div>';
+    document.getElementById('expense-table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>No expenses match this view.</p></div>';
     return;
   }
   let html = `<table class="expense-table"><thead><tr><th>Date</th><th>Description</th><th>Memo</th><th>Category</th><th>Who</th><th style="text-align:right">Amount</th><th></th></tr></thead><tbody>`;
   rows.forEach((e) => {
     const idx = state.expenses.indexOf(e);
     const isSplit = !!e._splitFrom;
+    const isUncategorized = !e.category || e.category === 'Uncategorized' || !state.categories.some(c => c.name === e.category);
     html += `<tr id="exp-row-${idx}" style="${isSplit ? 'opacity:.8;' : ''}">
       <td class="text-muted">${e.date||''}</td>
       <td>${escHtml(e.description||'')}${isSplit ? ' <span style="font-size:11px;color:var(--muted);">(split)</span>' : ''}</td>
       <td class="text-muted" style="font-size:13px;">${escHtml(e.memo||'')}</td>
-      <td><span class="badge">${escHtml(e.category||'')}</span></td>
+      <td>${isUncategorized
+        ? `<span class="badge" style="background:#FDF3E8;color:#854F0B;">Uncategorized</span>`
+        : `<span class="badge">${escHtml(e.category||'')}</span>`
+      }</td>
       <td class="text-muted">${escHtml(e.who||'')}</td>
       <td style="text-align:right; font-weight:500;">$${fmt(e.amount)}</td>
       <td style="white-space:nowrap; display:flex; gap:4px; justify-content:flex-end;">
@@ -1194,7 +1303,12 @@ function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-z
 function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
 function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); parseCSV(e.dataTransfer.files[0]); }
 function handleCSVFile(e) { parseCSV(e.target.files[0]); }
-function cancelCSV() { document.getElementById('csv-preview').style.display = 'none'; state.csvRows = []; state.csvHeaders = []; }
+function cancelCSV() {
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-success').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  state.csvRows = []; state.csvHeaders = [];
+}
 
 function parseCSV(file) {
   const reader = new FileReader();
@@ -1229,15 +1343,40 @@ function showCSVMapper() {
   document.getElementById('csv-map-grid').innerHTML = html;
 
   // Auto-detect common column names
+function showCSVMapper() {
+  document.getElementById('csv-preview').style.display = 'block';
+  document.getElementById('csv-success').style.display = 'none';
+  const fields = ['Date column', 'Amount column', 'Description column'];
+  const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
+  let html = '';
+  ids.forEach((id, i) => {
+    html += `<div>
+      <label class="field-label" style="font-size:11px;">${fields[i]}</label>
+      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+        ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+  html += `<div>
+    <label class="field-label" style="font-size:11px;">Fallback category</label>
+    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      <option value="Uncategorized" selected>Uncategorized (recommended)</option>
+      ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
+    </select>
+  </div>`;
+  document.getElementById('csv-map-grid').innerHTML = html;
+
   const lower = state.csvHeaders.map(h => h.toLowerCase());
   const guess = (words) => { const i = lower.findIndex(h => words.some(w => h.includes(w))); return i >= 0 ? i : 0; };
   document.getElementById('csv-date-col').value = guess(['date','time']);
   document.getElementById('csv-amount-col').value = guess(['amount','debit','charge','sum']);
   document.getElementById('csv-desc-col').value = guess(['desc','memo','narr','payee','merchant','name']);
 
-  const preview = state.csvRows.slice(0,5);
-  let t = `<table class="expense-table"><thead><tr>${state.csvHeaders.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>`;
-  preview.forEach(r => { t += `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
+  // Show ALL rows
+  const rowCount = state.csvRows.length;
+  document.getElementById('csv-row-count').textContent = `${rowCount} transaction${rowCount!==1?'s':''} found`;
+  let t = `<table class="expense-table" style="font-size:12px;"><thead><tr>${state.csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
+  state.csvRows.forEach(r => { t += `<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}</tr>`; });
   t += '</tbody></table>';
   document.getElementById('csv-preview-table').innerHTML = t;
 }
@@ -1246,10 +1385,12 @@ async function importCSV() {
   const di = parseInt(document.getElementById('csv-date-col').value);
   const ai = parseInt(document.getElementById('csv-amount-col').value);
   const dci = parseInt(document.getElementById('csv-desc-col').value);
-  const cat = document.getElementById('csv-cat-col').value;
-  const msg = document.getElementById('csv-status');
+  const fallbackCat = document.getElementById('csv-cat-col').value || 'Uncategorized';
+  const progress = document.getElementById('csv-progress');
+  progress.style.display = 'inline';
 
   let added = 0, autoCat = 0;
+  const newExpenses = [];
   for (const row of state.csvRows) {
     const rawAmt = (row[ai]||'').replace(/[$,()]/g,'').trim();
     const amount = Math.abs(parseFloat(rawAmt));
@@ -1261,17 +1402,39 @@ async function importCSV() {
     const description = row[dci]||'';
     const ruleMatch = applyRules(description);
     if (ruleMatch) autoCat++;
-    const category = ruleMatch || cat;
-    const exp = { date, amount, category, description, memo: '', who: 'Import' };
-    state.expenses.push(exp);
-    if (state.sheetUrl) { try { await sheetPost({ action: 'addExpense', ...exp }); } catch{} }
+    const category = ruleMatch || fallbackCat;
+    newExpenses.push({ date, amount, category, description, memo: '', who: 'Import' });
     added++;
   }
+
+  // Add all at once — no per-row await loop
+  state.expenses.push(...newExpenses);
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
-  const autoMsg = autoCat > 0 ? ` (${autoCat} auto-categorized by rules)` : '';
-  msg.className = 'status-msg success'; msg.textContent = `✓ Imported ${added} transactions${autoMsg}.`;
-  renderDashboard(); renderExpenseTable();
-  setTimeout(() => { cancelCSV(); }, 2500);
+  renderDashboard();
+  renderExpenseTable();
+
+  // Sync to sheet in one call
+  if (state.sheetUrl) {
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 15000));
+      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
+    } catch { /* silent — data is safe locally */ }
+  }
+
+  progress.style.display = 'none';
+
+  // Show success, hide the preview, reset file input
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  state.csvRows = []; state.csvHeaders = [];
+
+  const uncat = added - autoCat;
+  const successEl = document.getElementById('csv-success');
+  successEl.style.display = 'block';
+  successEl.innerHTML = `<div class="status-msg success" style="display:block;">
+    ✓ Imported ${added} transaction${added!==1?'s':''}${autoCat > 0 ? ` — ${autoCat} auto-categorized, ` : ' — '}${uncat > 0 ? `<strong>${uncat} need categorizing</strong> (see Expenses → Uncategorized filter)` : 'all categorized!'}.
+  </div>`;
+  setTimeout(() => { successEl.style.display = 'none'; }, 8000);
 }
 
 // ─── Budget Editor (grouped, drag-and-drop) ──────────────────────────
