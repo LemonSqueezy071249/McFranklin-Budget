@@ -166,6 +166,27 @@
   .filter-cat-check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
   .filter-cat-check input { cursor: pointer; width: 14px; height: 14px; accent-color: var(--accent); }
 
+  /* Split expense */
+  .split-row-container { background: var(--accent-light); border-top: 1px solid var(--border); }
+  .split-row-container td { padding: 12px 16px !important; }
+  .split-editor { display: flex; flex-direction: column; gap: 8px; }
+  .split-header { font-size: 12px; font-weight: 500; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .split-line { display: grid; grid-template-columns: 1fr 130px 36px; gap: 8px; align-items: center; }
+  .split-line input, .split-line select { padding: 6px 9px; font-size: 13px; }
+  .split-total-row { display: flex; align-items: center; gap: 12px; padding-top: 4px; font-size: 13px; }
+  .split-remaining { font-weight: 500; }
+  .split-remaining.ok { color: var(--accent); }
+  .split-remaining.over { color: var(--danger); }
+  .split-remaining.uneven { color: var(--warn); }
+  .split-btn { font-size: 12px; padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer; font-family: var(--sans); font-weight: 500; transition: all .15s; }
+  .split-btn-confirm { background: var(--accent); color: white; }
+  .split-btn-confirm:hover { background: #1D3A0E; }
+  .split-btn-confirm:disabled { opacity: .45; cursor: default; }
+  .split-btn-cancel { background: none; border: 1px solid var(--border) !important; color: var(--muted); }
+  .split-btn-cancel:hover { color: var(--text); border-color: var(--text) !important; }
+  .split-btn-add { background: none; color: var(--accent); border: 1px dashed var(--accent-mid) !important; }
+  .split-btn-add:hover { background: var(--accent-light); }
+
   /* Budget editor grouped drag-drop */
   .budget-group-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
   .budget-group-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
@@ -843,7 +864,7 @@ function renderDashboard() {
 function renderExpenseTable() {
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
   const rows = [...state.expenses]
-    .filter(e => !q || (e.description||'').toLowerCase().includes(q) || (e.category||'').toLowerCase().includes(q))
+    .filter(e => !q || (e.description||'').toLowerCase().includes(q) || (e.category||'').toLowerCase().includes(q) || (e.memo||'').toLowerCase().includes(q))
     .sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
   if (!rows.length) {
@@ -851,16 +872,23 @@ function renderExpenseTable() {
     return;
   }
   let html = `<table class="expense-table"><thead><tr><th>Date</th><th>Description</th><th>Memo</th><th>Category</th><th>Who</th><th style="text-align:right">Amount</th><th></th></tr></thead><tbody>`;
-  rows.forEach((e, i) => {
+  rows.forEach((e) => {
     const idx = state.expenses.indexOf(e);
-    html += `<tr>
+    const isSplit = !!e._splitFrom;
+    html += `<tr id="exp-row-${idx}" style="${isSplit ? 'opacity:.8;' : ''}">
       <td class="text-muted">${e.date||''}</td>
-      <td>${e.description||''}</td>
-      <td class="text-muted" style="font-size:13px;">${e.memo||''}</td>
-      <td><span class="badge">${e.category||''}</span></td>
-      <td class="text-muted">${e.who||''}</td>
+      <td>${escHtml(e.description||'')}${isSplit ? ' <span style="font-size:11px;color:var(--muted);">(split)</span>' : ''}</td>
+      <td class="text-muted" style="font-size:13px;">${escHtml(e.memo||'')}</td>
+      <td><span class="badge">${escHtml(e.category||'')}</span></td>
+      <td class="text-muted">${escHtml(e.who||'')}</td>
       <td style="text-align:right; font-weight:500;">$${fmt(e.amount)}</td>
-      <td><button class="del-btn" onclick="deleteExpense(${idx})">✕</button></td>
+      <td style="white-space:nowrap; display:flex; gap:4px; justify-content:flex-end;">
+        <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px; padding:2px 7px;">⇌</button>
+        <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>
+      </td>
+    </tr>
+    <tr id="split-row-${idx}" style="display:none;">
+      <td colspan="7" class="split-row-container" style="padding:0;"></td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -878,6 +906,146 @@ async function deleteExpense(idx) {
       const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
       await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
     } catch { /* silent — local state is correct, sheet will resync on next load */ }
+  }
+}
+
+// ─── Split Expense ────────────────────────────────────────────────────
+let splitState = {}; // { idx, total, lines: [{category, amount, memo}] }
+
+function openSplit(idx) {
+  // Close any other open split editors
+  document.querySelectorAll('[id^="split-row-"]').forEach(r => { r.style.display = 'none'; });
+
+  const e = state.expenses[idx];
+  if (!e) return;
+
+  splitState = {
+    idx,
+    total: parseFloat(e.amount) || 0,
+    lines: [
+      { category: e.category || state.categories[0]?.name || '', amount: '', memo: e.memo || '' },
+      { category: state.categories[0]?.name || '', amount: '', memo: '' }
+    ]
+  };
+
+  const row = document.getElementById(`split-row-${idx}`);
+  if (!row) return;
+  row.style.display = '';
+  renderSplitEditor(idx);
+  row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderSplitEditor(idx) {
+  const container = document.querySelector(`#split-row-${idx} td`);
+  if (!container) return;
+  const { total, lines } = splitState;
+  const allocated = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const remaining = total - allocated;
+  const isOver = remaining < -0.005;
+  const isExact = Math.abs(remaining) < 0.005;
+  const remainCls = isOver ? 'over' : isExact ? 'ok' : 'uneven';
+  const catOptions = state.categories.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
+
+  let linesHtml = lines.map((l, li) => `
+    <div class="split-line" id="split-line-${li}">
+      <select onchange="updateSplitLine(${li},'category',this.value)">
+        ${state.categories.map(c => `<option value="${escHtml(c.name)}" ${c.name===l.category?'selected':''}>${escHtml(c.name)}</option>`).join('')}
+      </select>
+      <input type="number" placeholder="Amount" value="${l.amount}" step="0.01" min="0"
+        oninput="updateSplitLine(${li},'amount',this.value)"
+        onblur="autoFillLast(${li})">
+      <button class="del-btn" onclick="removeSplitLine(${li})" style="font-size:14px;">✕</button>
+    </div>
+    <div style="padding:0 0 6px 0;">
+      <input type="text" placeholder="Memo (optional)" value="${escHtml(l.memo||'')}"
+        style="font-size:12px; padding:4px 8px; color:var(--muted); width:calc(100% - 44px);"
+        oninput="updateSplitLine(${li},'memo',this.value)">
+    </div>`).join('');
+
+  container.innerHTML = `<div class="split-editor">
+    <div class="split-header">Split $${fmt(total)} — ${escHtml(state.expenses[idx]?.description || '')}</div>
+    ${linesHtml}
+    <div class="split-total-row">
+      <button class="split-btn split-btn-add" onclick="addSplitLine()">+ Add line</button>
+      <span class="text-muted" style="flex:1; font-size:13px;">
+        Allocated: $${fmt(allocated)} &nbsp;·&nbsp;
+        <span class="split-remaining ${remainCls}">
+          ${isExact ? '✓ Fully allocated' : isOver ? `$${fmt(Math.abs(remaining))} over` : `$${fmt(remaining)} remaining`}
+        </span>
+      </span>
+      <button class="split-btn split-btn-cancel" onclick="closeSplit()">Cancel</button>
+      <button class="split-btn split-btn-confirm" onclick="confirmSplit()" ${isExact ? '' : 'disabled'}>Confirm split</button>
+    </div>
+  </div>`;
+}
+
+function updateSplitLine(li, key, val) {
+  splitState.lines[li][key] = val;
+  renderSplitEditor(splitState.idx);
+}
+
+function autoFillLast(li) {
+  // If this is the last line and there's still remaining, fill it in
+  const { total, lines } = splitState;
+  if (li !== lines.length - 1) return;
+  const allocatedExcludingLast = lines.slice(0, -1).reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const remaining = total - allocatedExcludingLast;
+  if (remaining > 0 && !lines[li].amount) {
+    splitState.lines[li].amount = remaining.toFixed(2);
+    renderSplitEditor(splitState.idx);
+  }
+}
+
+function addSplitLine() {
+  splitState.lines.push({ category: state.categories[0]?.name || '', amount: '', memo: '' });
+  renderSplitEditor(splitState.idx);
+  // Focus the new amount field
+  setTimeout(() => {
+    const lines = document.querySelectorAll('.split-line');
+    lines[lines.length - 1]?.querySelector('input[type=number]')?.focus();
+  }, 30);
+}
+
+function removeSplitLine(li) {
+  if (splitState.lines.length <= 2) return; // keep at least 2
+  splitState.lines.splice(li, 1);
+  renderSplitEditor(splitState.idx);
+}
+
+function closeSplit() {
+  const row = document.getElementById(`split-row-${splitState.idx}`);
+  if (row) row.style.display = 'none';
+  splitState = {};
+}
+
+async function confirmSplit() {
+  const { idx, total, lines } = splitState;
+  const allocated = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  if (Math.abs(total - allocated) > 0.005) return;
+
+  const original = state.expenses[idx];
+  const splitRows = lines.map(l => ({
+    date: original.date,
+    amount: parseFloat(l.amount),
+    category: l.category,
+    description: original.description,
+    memo: l.memo || '',
+    who: original.who,
+    _splitFrom: original.description
+  }));
+
+  // Replace original with split rows
+  state.expenses.splice(idx, 1, ...splitRows);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  splitState = {};
+  renderExpenseTable();
+  renderDashboard();
+
+  if (state.sheetUrl) {
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
+      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
+    } catch { /* silent */ }
   }
 }
 
