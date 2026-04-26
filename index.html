@@ -1323,28 +1323,6 @@ function parseCSV(file) {
 
 function showCSVMapper() {
   document.getElementById('csv-preview').style.display = 'block';
-  const fields = ['Date column', 'Amount column', 'Description column'];
-  const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
-  let html = '';
-  ids.forEach((id, i) => {
-    html += `<div>
-      <label class="field-label" style="font-size:11px;">${fields[i]}</label>
-      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;">
-        ${state.csvHeaders.map((h,j) => `<option value="${j}">${h}</option>`).join('')}
-      </select>
-    </div>`;
-  });
-  html += `<div>
-    <label class="field-label" style="font-size:11px;">Category (assign all)</label>
-    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
-      ${state.categories.map(c=>`<option value="${c.name}">${c.name}</option>`).join('')}
-    </select>
-  </div>`;
-  document.getElementById('csv-map-grid').innerHTML = html;
-
-  // Auto-detect common column names
-function showCSVMapper() {
-  document.getElementById('csv-preview').style.display = 'block';
   document.getElementById('csv-success').style.display = 'none';
   const fields = ['Date column', 'Amount column', 'Description column'];
   const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
