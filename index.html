@@ -118,7 +118,7 @@
   /* Expense table */
   .expense-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .expense-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1.5px solid var(--border); }
-  .expense-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); }
+  .expense-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   .expense-table tr:last-child td { border-bottom: none; }
   .expense-table tr:hover td { background: var(--bg); }
   .del-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
@@ -362,8 +362,8 @@
         </div>
         <div id="csv-preview-table" style="overflow-x:auto; max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius);"></div>
         <div style="margin-top:1rem; display:flex; gap:8px; align-items:center;">
-          <button class="btn btn-primary" onclick="importCSV()">Import Rows</button>
-          <button class="btn btn-secondary" onclick="cancelCSV()">Cancel</button>
+          <button id="import-btn" class="btn btn-primary" onclick="importCSV()">Import Rows</button>
+          <button id="cancel-btn" class="btn btn-secondary" onclick="cancelCSV()">Cancel</button>
           <span id="csv-progress" style="font-size:13px; color:var(--muted); display:none;">Importing…</span>
         </div>
         <div id="csv-status" class="status-msg"></div>
@@ -1751,6 +1751,31 @@ function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'
 
 
 function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+// --- Patch: disable buttons during CSV import ---
+const _origImportCSV = importCSV;
+importCSV = async function() {
+  const importBtn = document.getElementById('import-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  if (importBtn) importBtn.disabled = true;
+  if (cancelBtn) cancelBtn.disabled = true;
+  try {
+    await _origImportCSV();
+  } finally {
+    if (importBtn) importBtn.disabled = false;
+    if (cancelBtn) cancelBtn.disabled = false;
+  }
+};
+
+const _origCancelCSV = cancelCSV;
+cancelCSV = function() {
+  const importBtn = document.getElementById('import-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  if (importBtn) importBtn.disabled = false;
+  if (cancelBtn) cancelBtn.disabled = false;
+  _origCancelCSV();
+};
+
 </script>
 </body>
 </html>
