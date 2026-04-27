@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>McFranklin Budget 1.21</title>
+<title>McFranklin Budget 1.22</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -118,7 +118,8 @@
   /* Expense table */
   .expense-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .expense-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1.5px solid var(--border); }
-  .expense-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  /* FIXED ALIGNMENT HERE */
+  .expense-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; } 
   .expense-table tr:last-child td { border-bottom: none; }
   .expense-table tr:hover td { background: var(--bg); }
   .del-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
@@ -1002,10 +1003,12 @@ function renderExpenseTable() {
       }</td>
       <td class="text-muted">${escHtml(e.who||'')}</td>
       <td style="text-align:right; font-weight:500;">$${fmt(e.amount)}</td>
-      <td style="white-space:nowrap; display:flex; gap:4px; justify-content:flex-end;">
-        <button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
-        <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px; padding:2px 7px;">⇌</button>
-        <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>
+      <td style="white-space:nowrap; vertical-align: middle;">
+        <div style="display:flex; gap:4px; justify-content:flex-end; align-items:center; height: 100%;">
+          <button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
+          <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px; padding:2px 7px;">⇌</button>
+          <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>
+        </div>
       </td>
     </tr>
     <tr id="edit-row-${idx}" style="display:none;">
