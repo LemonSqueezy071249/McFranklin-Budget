@@ -198,7 +198,14 @@
   .pencil-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
   .pencil-btn:hover { color: var(--accent); background: var(--accent-light); }
 
-  /* Budget editor grouped drag-drop */
+  /* CSV column mapper — 2-up on desktop, 1-up on mobile */
+  .csv-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; font-size: 13px; }
+  .csv-map-grid .csv-map-full { grid-column: 1 / -1; }
+  @media (max-width: 520px) { .csv-map-grid { grid-template-columns: 1fr; } .csv-map-grid .csv-map-full { grid-column: 1; } }
+
+  /* Rules editor — description | action dropdown | category | delete */
+  .rule-row { display: grid; grid-template-columns: 1fr 140px 1fr 36px; align-items: center; gap: 8px; margin-bottom: 6px; }
+  @media (max-width: 600px) { .rule-row { grid-template-columns: 1fr 110px 36px; } .rule-row .rule-cat-col { display: none; } }
   .budget-group-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
   .budget-group-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
   .budget-group-header .drag-handle { color: var(--muted); font-size: 16px; cursor: grab; flex-shrink: 0; line-height: 1; }
@@ -350,7 +357,7 @@
       <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSVFile(event)">
       <div id="csv-preview" style="margin-top:1.5rem; display:none;">
         <h3 style="font-size:14px; font-weight:500; margin-bottom:0.75rem;">Map columns</h3>
-        <div id="csv-map-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:1rem; font-size:13px;"></div>
+        <div id="csv-map-grid" class="csv-map-grid"></div>
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
           <span style="font-size:13px; font-weight:500;" id="csv-row-count"></span>
           <span style="font-size:12px; color:var(--muted);">Scroll to see all rows</span>
@@ -369,12 +376,13 @@
 
   <div id="tab-rules" class="panel">
     <div class="settings-section">
-      <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400; margin-bottom:0.25rem;">Auto-categorization Rules</h2>
-      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">When importing a CSV, if a transaction description contains the text below, it will automatically be assigned the matching category. Rules are checked top-to-bottom — first match wins.</p>
+      <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400; margin-bottom:0.25rem;">Import Rules</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">During CSV import, each transaction description is checked against these rules top-to-bottom — first match wins. Rules can assign a category or delete the transaction entirely (useful for autopay or payment rows you never want to see).</p>
 
-      <div style="display:grid; grid-template-columns:1fr 1fr 36px; gap:8px; margin-bottom:6px;">
-        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500; padding:0 2px;">If description contains…</div>
-        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500; padding:0 2px;">Assign to category</div>
+      <div class="rule-row" style="margin-bottom:8px;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">If description contains…</div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">Action</div>
+        <div class="rule-cat-col" style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">Category</div>
         <div></div>
       </div>
       <div id="rules-editor"></div>
@@ -1390,8 +1398,8 @@ function showCSVMapper() {
     </select>
   </div>`;
 
-  // Fallback category for rows that don't match any rule
-  html += `<div style="grid-column: 1 / -1;">
+  // Fallback category for rows that don't match any rule — spans full width
+  html += `<div class="csv-map-full">
     <label class="field-label" style="font-size:11px;">Fallback category</label>
     <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
       <option value="Uncategorized" selected>Uncategorized (recommended)</option>
@@ -1399,8 +1407,7 @@ function showCSVMapper() {
     </select>
   </div>`;
 
-  // Update grid to 4 columns since we added the credit column
-  document.getElementById('csv-map-grid').style.gridTemplateColumns = '1fr 1fr 1fr 1fr';
+  // csv-map-grid CSS class handles responsive layout
   document.getElementById('csv-map-grid').innerHTML = html;
 
   // Auto-detect common column name patterns
@@ -1438,7 +1445,7 @@ async function importCSV() {
   if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing…'; }
   if (cancelBtn) { cancelBtn.disabled = true; }
 
-  let added = 0, autoCat = 0, refunds = 0;
+  let added = 0, autoCat = 0, refunds = 0, deleted = 0;
   const newTransactions = [];
 
   for (const row of state.csvRows) {
@@ -1472,6 +1479,10 @@ async function importCSV() {
 
     // Apply rules to auto-categorize — fallback to chosen fallback category
     const ruleMatch = applyRules(description);
+
+    // If a delete rule matched, skip this row entirely
+    if (ruleMatch === '__delete__') { deleted++; continue; }
+
     if (ruleMatch) autoCat++;
     const category = ruleMatch || fallbackCat;
 
@@ -1505,10 +1516,11 @@ async function importCSV() {
   // Show a summary message
   const uncat = added - autoCat - refunds;
   const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
+  const deletedNote = deleted > 0 ? `, ${deleted} skipped by rules` : '';
   const successEl = document.getElementById('csv-success');
   successEl.style.display = 'block';
   successEl.innerHTML = `<div class="status-msg success" style="display:block;">
-    ✓ Imported ${added} transaction${added!==1?'s':''}${refundNote}${autoCat > 0 ? ` — ${autoCat} auto-categorized` : ''}${uncat > 0 ? `, <strong>${uncat} need categorizing</strong> (see Transactions → Uncategorized filter)` : ', all categorized!'}.
+    ✓ Imported ${added} transaction${added!==1?'s':''}${refundNote}${deletedNote}${autoCat > 0 ? ` — ${autoCat} auto-categorized` : ''}${uncat > 0 ? `, <strong>${uncat} need categorizing</strong> (see Transactions → Uncategorized filter)` : ', all categorized!'}.
   </div>`;
   setTimeout(() => { successEl.style.display = 'none'; }, 8000);
 }
@@ -1746,11 +1758,21 @@ function renderRulesEditor() {
   }
   let html = '';
   state.rules.forEach((r, i) => {
-    html += `<div style="display:grid; grid-template-columns:1fr 1fr 36px; gap:8px; margin-bottom:6px;" id="rule-row-${i}">
-      <input type="text" value="${escHtml(r.contains)}" onchange="updateRule(${i},'contains',this.value)" placeholder="e.g. KROGER">
-      <select onchange="updateRule(${i},'category',this.value)">
-        ${state.categories.map(c => `<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.name}</option>`).join('')}
+    const isDelete = r.action === 'delete';
+    html += `<div class="rule-row" id="rule-row-${i}">
+      <input type="text" value="${escHtml(r.contains)}" onchange="updateRule(${i},'contains',this.value)" placeholder="e.g. AUTOPAY">
+      <select onchange="updateRuleAction(${i},this.value)">
+        <option value="categorize" ${!isDelete?'selected':''}>Categorize as…</option>
+        <option value="delete" ${isDelete?'selected':''}>🗑 Delete on import</option>
       </select>
+      <div class="rule-cat-col">
+        ${isDelete
+          ? `<span style="font-size:12px;color:var(--muted);padding:0 4px;align-self:center;display:block;">— deleted</span>`
+          : `<select onchange="updateRule(${i},'category',this.value)">
+              ${state.categories.map(c => `<option value="${escHtml(c.name)}" ${c.name===r.category?'selected':''}>${escHtml(c.name)}</option>`).join('')}
+            </select>`
+        }
+      </div>
       <button class="del-btn" onclick="removeRule(${i})" style="display:flex;align-items:center;justify-content:center;">✕</button>
     </div>`;
   });
@@ -1758,10 +1780,15 @@ function renderRulesEditor() {
 }
 
 function updateRule(i, key, val) { state.rules[i][key] = val; }
+function updateRuleAction(i, val) {
+  state.rules[i].action = val;
+  if (val === 'delete') state.rules[i].category = '';
+  renderRulesEditor();
+}
 function removeRule(i) { state.rules.splice(i, 1); renderRulesEditor(); }
 function addRuleRow() {
   const defaultCat = state.categories[0]?.name || '';
-  state.rules.push({ contains: '', category: defaultCat });
+  state.rules.push({ contains: '', action: 'categorize', category: defaultCat });
   renderRulesEditor();
   setTimeout(() => document.querySelector(`#rule-row-${state.rules.length-1} input`)?.focus(), 50);
 }
@@ -1852,12 +1879,15 @@ async function saveFilters() {
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────
-// applyRules: walks the rules list and returns the first matching category.
+// applyRules: walks the rules list and returns the first matching category,
+// '__delete__' if a delete rule matches, or null if nothing matches.
 function applyRules(description) {
   if (!description || !state.rules.length) return null;
   const lower = description.toLowerCase();
   for (const rule of state.rules) {
-    if (rule.contains && lower.includes(rule.contains.toLowerCase())) return rule.category;
+    if (rule.contains && lower.includes(rule.contains.toLowerCase())) {
+      return rule.action === 'delete' ? '__delete__' : rule.category;
+    }
   }
   return null;
 }
