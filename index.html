@@ -245,23 +245,20 @@
     </div>
   </header>
 
-  <!-- Config Banner -->
   <div id="config-banner">
     <strong>⚙️ Setup required — connect your Google Sheet</strong>
     <p>Go to the <strong>Settings</strong> tab and paste in your Google Apps Script Web App URL. See the setup instructions there for a step-by-step guide.</p>
   </div>
 
-  <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
-    <button class="tab" onclick="switchTab('expenses')">Expenses</button>
-    <button class="tab" onclick="switchTab('add')">Add Expense</button>
+    <button class="tab" onclick="switchTab('expenses')">Transactions</button>
+    <button class="tab" onclick="switchTab('add')">Add Transaction</button>
     <button class="tab" onclick="switchTab('budget')">Budget</button>
     <button class="tab" onclick="switchTab('rules')">Rules</button>
     <button class="tab" onclick="switchTab('settings')">Settings</button>
   </div>
 
-  <!-- DASHBOARD -->
   <div id="tab-dashboard" class="panel active">
     <div class="summary-grid" id="summary-cards"></div>
     <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:1.5rem; align-items:flex-start;">
@@ -278,7 +275,6 @@
     <div id="categories-view"></div>
   </div>
 
-  <!-- EXPENSES -->
   <div id="tab-expenses" class="panel">
     <div style="margin-bottom:1.25rem;">
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;">
@@ -303,10 +299,9 @@
     <div id="expense-table-wrap"></div>
   </div>
 
-  <!-- ADD EXPENSE -->
   <div id="tab-add" class="panel">
     <div class="form-card">
-      <h2>Add Expense</h2>
+      <h2>Add Transaction</h2>
       <div class="form-grid">
         <div class="form-group">
           <label class="field-label">Date</label>
@@ -344,9 +339,8 @@
       <div id="add-status" class="status-msg"></div>
     </div>
 
-    <!-- CSV Import -->
     <div class="form-card">
-      <h2>Import from CSV</h2>
+      <h2>Import Transactions from CSV</h2>
       <p class="text-sm text-muted" style="margin-bottom:1rem;">Export transactions from your bank as CSV, then upload here. Rules will auto-categorize what they can — the rest goes to Uncategorized for you to sort.</p>
       <div class="import-area" id="drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
         <div class="icon">📂</div>
@@ -373,7 +367,6 @@
     </div>
   </div>
 
-  <!-- RULES -->
   <div id="tab-rules" class="panel">
     <div class="settings-section">
       <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400; margin-bottom:0.25rem;">Auto-categorization Rules</h2>
@@ -426,7 +419,6 @@
     </div>
   </div>
 
-  <!-- BUDGET CATEGORIES -->
   <div id="tab-budget" class="panel">
     <div class="settings-section">
       <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">
@@ -451,6 +443,8 @@
 
 <script>
 // ─── State ───────────────────────────────────────────────────────────
+// DEFAULT_CATEGORIES is the fallback used only on first load if no data
+// exists in localStorage or Google Sheets yet.
 const DEFAULT_CATEGORIES = [
   { group: "Giving", name: "Tithe (on Net)", budget: 0, period: "monthly" },
   { group: "Giving", name: "Isaac Missionary Support", budget: 0, period: "monthly" },
@@ -492,6 +486,8 @@ const DEFAULT_CATEGORIES = [
   { group: "Savings", name: "401k", budget: 0, period: "monthly" },
 ];
 
+// Central app state. Persisted to localStorage as a cache;
+// Google Sheets is the source of truth when connected.
 let state = {
   categories: JSON.parse(localStorage.getItem('budget_cats') || 'null') || DEFAULT_CATEGORIES,
   expenses: JSON.parse(localStorage.getItem('budget_expenses') || '[]'),
@@ -513,6 +509,9 @@ let state = {
 };
 
 // ─── Apps Script Code ────────────────────────────────────────────────
+// This string is displayed in the Settings tab so the user can copy-paste
+// it into their Google Apps Script editor. It defines doGet (reads all data)
+// and doPost (writes expenses, budgets, rules, filters, group order).
 const APPS_SCRIPT = `function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -606,6 +605,8 @@ function doGet(e) {
 document.getElementById('apps-script-code').textContent = APPS_SCRIPT;
 
 // ─── Init ────────────────────────────────────────────────────────────
+// Runs once on page load. Restores the sheet URL from localStorage,
+// kicks off a Sheets sync if connected, and renders all UI sections.
 window.onload = function() {
   if (state.sheetUrl) {
     document.getElementById('sheet-url').value = state.sheetUrl;
@@ -637,6 +638,9 @@ function saveSheetUrl() {
 }
 
 // ─── Sheet API ───────────────────────────────────────────────────────
+// sheetPost sends data to the Apps Script doPost handler.
+// Google Apps Script redirects POSTs, so we follow redirects and treat
+// any successful response (including opaque redirects) as ok.
 async function sheetPost(data) {
   if (!state.sheetUrl) return { ok: false, error: 'No URL' };
   // Google Apps Script redirects POST to GET — send as GET with payload in query string
@@ -653,6 +657,9 @@ async function sheetPost(data) {
   try { return await res.json(); } catch { return { ok: true }; }
 }
 
+// Fetches all data from Google Sheets (expenses, budgets, rules, filters,
+// group order) and updates both state and localStorage.
+// A cache-busting query param prevents stale CDN responses.
 async function fetchFromSheet() {
   if (!state.sheetUrl) return;
   const url = state.sheetUrl + (state.sheetUrl.includes('?') ? '&' : '?') + '_=' + Date.now();
@@ -716,6 +723,7 @@ async function testConnection() {
 
 
 // ─── Tabs ────────────────────────────────────────────────────────────
+// Shows the selected panel and highlights the active tab button.
 function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -724,6 +732,9 @@ function switchTab(name) {
 }
 
 // ─── Period ──────────────────────────────────────────────────────────
+// Controls the dashboard time period (monthly / YTD / full year / custom).
+// setPeriod updates state and re-renders the dashboard.
+// populateMonthPicker fills the custom-month dropdown with the last 24 months.
 function setPeriod(p) {
   document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
   event.currentTarget.classList.add('active');
@@ -842,6 +853,8 @@ function getExpFilteredExpenses() {
 }
 
 // ─── Filter expenses by period ───────────────────────────────────────
+// Returns the subset of expenses that fall within the dashboard's current
+// time period (monthly, YTD, yearly, or custom month).
 function getFilteredExpenses() {
   const now = new Date();
   return state.expenses.filter(e => {
@@ -869,6 +882,10 @@ function getBudgetForPeriod(cat) {
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────
+// renderFilterBar rebuilds the filter chip row (All + saved filters).
+// setFilter applies a named filter or clears it (null = All).
+// getVisibleCategories returns the category list after applying the active filter.
+// renderDashboard redraws summary cards and all category rows including YTD context.
 function renderFilterBar() {
   const bar = document.getElementById('filter-bar');
   if (!bar) return;
@@ -971,7 +988,10 @@ function renderDashboard() {
   document.getElementById('categories-view').innerHTML = html || '<div class="empty-state"><div class="icon">📊</div><p>No categories yet — add some in Budget.</p></div>';
 }
 
-// ─── Expense Table ───────────────────────────────────────────────────
+// ─── Transaction Table ───────────────────────────────────────────────
+// Renders the full transaction list respecting the active period, category
+// filter, and search query. Each row gets Edit (✎), Split (⇌), and Delete (✕)
+// buttons with hidden inline editor rows that open beneath each transaction.
 function renderExpenseTable() {
   renderExpFilterChips();
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
@@ -985,7 +1005,7 @@ function renderExpenseTable() {
   if (countEl) countEl.textContent = `${rows.length} transaction${rows.length!==1?'s':''} · $${fmt(totalAmt)} total`;
 
   if (!rows.length) {
-    document.getElementById('expense-table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>No expenses match this view.</p></div>';
+    document.getElementById('expense-table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>No transactions match this view.</p></div>';
     return;
   }
   let html = `<table class="expense-table"><thead><tr><th>Date</th><th>Description</th><th>Memo</th><th>Category</th><th>Who</th><th style="text-align:right">Amount</th><th></th></tr></thead><tbody>`;
@@ -1036,7 +1056,12 @@ async function deleteExpense(idx) {
   }
 }
 
-// ─── Split Expense ────────────────────────────────────────────────────
+// ─── Split Transaction ────────────────────────────────────────────────
+// Lets the user divide a single transaction (e.g. a Target run) into
+// multiple categorized lines that must add up to exactly the original amount.
+// openSplit initializes splitState and opens the editor row.
+// renderSplitEditor rebuilds the editor UI each time a line changes.
+// confirmSplit replaces the original transaction with the split rows.
 let splitState = {}; // { idx, total, lines: [{category, amount, memo}] }
 
 function openSplit(idx) {
@@ -1176,7 +1201,9 @@ async function confirmSplit() {
   }
 }
 
-// ─── Edit Expense ─────────────────────────────────────────────────────
+// ─── Edit Transaction ─────────────────────────────────────────────────
+// Opens an inline edit form below the selected transaction row.
+// saveEdit validates, updates state, re-renders, and syncs to Sheets.
 function openEdit(idx) {
   // Close any other open editors
   document.querySelectorAll('[id^="edit-row-"],[id^="split-row-"]').forEach(r => r.style.display = 'none');
@@ -1257,11 +1284,15 @@ async function saveEdit(idx) {
     } catch { /* silent */ }
   }
 }
+// Populates the category <select> in the Add Transaction form
+// and the edit form with the current category list.
 function populateCategorySelect() {
   const sel = document.getElementById('exp-cat');
   sel.innerHTML = state.categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
 }
 
+// Reads the manual-entry form, validates, saves locally and to Sheets,
+// then clears the form. Used for transactions added one at a time.
 async function addExpense() {
   const date = document.getElementById('exp-date').value;
   const amount = parseFloat(document.getElementById('exp-amount').value);
@@ -1284,9 +1315,9 @@ async function addExpense() {
   if (state.sheetUrl) {
     try {
       const res = await sheetPost({ action: 'addExpense', ...exp });
-      if (res.ok) { msg.className = 'status-msg success'; msg.textContent = '✓ Saved to Google Sheets!'; }
+      if (res.ok) { msg.className = 'status-msg success'; msg.textContent = '✓ Transaction saved to Google Sheets!'; }
       else throw new Error();
-    } catch { msg.className = 'status-msg error'; msg.textContent = '✗ Saved locally but could not sync to Sheets. Check your connection.'; }
+    } catch { msg.className = 'status-msg error'; msg.textContent = '✗ Saved locally but sheet sync failed.'; }
   } else {
     msg.className = 'status-msg success'; msg.textContent = '✓ Saved locally. Connect Google Sheets in Settings to sync.';
   }
@@ -1302,10 +1333,15 @@ function clearForm() {
 }
 
 // ─── CSV Import ──────────────────────────────────────────────────────
+// Handles drag-and-drop or file-picker CSV uploads.
+// Parses the file, shows a column mapper, applies rules, then bulk-saves.
+
 function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
 function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
 function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); parseCSV(e.dataTransfer.files[0]); }
 function handleCSVFile(e) { parseCSV(e.target.files[0]); }
+
+// Resets the import UI and clears parsed CSV data from state
 function cancelCSV() {
   document.getElementById('csv-preview').style.display = 'none';
   document.getElementById('csv-success').style.display = 'none';
@@ -1313,6 +1349,7 @@ function cancelCSV() {
   state.csvRows = []; state.csvHeaders = [];
 }
 
+// Reads the file and parses it into headers + rows stored on state
 function parseCSV(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -1324,10 +1361,15 @@ function parseCSV(file) {
   reader.readAsText(file);
 }
 
+// Renders the column-mapping UI after a CSV is parsed.
+// Includes an optional "Credit/Refund column" for banks like Citi that
+// put charges and refunds in separate columns.
 function showCSVMapper() {
   document.getElementById('csv-preview').style.display = 'block';
   document.getElementById('csv-success').style.display = 'none';
-  const fields = ['Date column', 'Amount column', 'Description column'];
+
+  // Build dropdowns for the required columns
+  const fields = ['Date column', 'Debit / charge column', 'Description column'];
   const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
   let html = '';
   ids.forEach((id, i) => {
@@ -1338,22 +1380,40 @@ function showCSVMapper() {
       </select>
     </div>`;
   });
+
+  // Optional credit/refund column — defaults to "None"
   html += `<div>
+    <label class="field-label" style="font-size:11px;">Credit / refund column <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">— optional</span></label>
+    <select id="csv-credit-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      <option value="-1">None</option>
+      ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
+    </select>
+  </div>`;
+
+  // Fallback category for rows that don't match any rule
+  html += `<div style="grid-column: 1 / -1;">
     <label class="field-label" style="font-size:11px;">Fallback category</label>
     <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
       <option value="Uncategorized" selected>Uncategorized (recommended)</option>
       ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
     </select>
   </div>`;
+
+  // Update grid to 4 columns since we added the credit column
+  document.getElementById('csv-map-grid').style.gridTemplateColumns = '1fr 1fr 1fr 1fr';
   document.getElementById('csv-map-grid').innerHTML = html;
 
+  // Auto-detect common column name patterns
   const lower = state.csvHeaders.map(h => h.toLowerCase());
   const guess = (words) => { const i = lower.findIndex(h => words.some(w => h.includes(w))); return i >= 0 ? i : 0; };
-  document.getElementById('csv-date-col').value = guess(['date','time']);
-  document.getElementById('csv-amount-col').value = guess(['amount','debit','charge','sum']);
-  document.getElementById('csv-desc-col').value = guess(['desc','memo','narr','payee','merchant','name']);
+  document.getElementById('csv-date-col').value   = guess(['date','time']);
+  document.getElementById('csv-amount-col').value = guess(['debit','charge','amount','sum']);
+  document.getElementById('csv-desc-col').value   = guess(['desc','memo','narr','payee','merchant','name']);
+  // Try to auto-detect a credit column
+  const creditIdx = lower.findIndex(h => ['credit','refund','payment','deposit'].some(w => h.includes(w)));
+  if (creditIdx >= 0) document.getElementById('csv-credit-col').value = creditIdx;
 
-  // Show ALL rows
+  // Show ALL rows in a scrollable preview table
   const rowCount = state.csvRows.length;
   document.getElementById('csv-row-count').textContent = `${rowCount} transaction${rowCount!==1?'s':''} found`;
   let t = `<table class="expense-table" style="font-size:12px;"><thead><tr>${state.csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
@@ -1362,63 +1422,102 @@ function showCSVMapper() {
   document.getElementById('csv-preview-table').innerHTML = t;
 }
 
+// Processes the mapped columns, applies auto-categorization rules,
+// then saves all transactions at once (locally + to Google Sheets).
+// The import button is disabled for the duration to prevent double-imports.
 async function importCSV() {
-  const di = parseInt(document.getElementById('csv-date-col').value);
-  const ai = parseInt(document.getElementById('csv-amount-col').value);
+  const di  = parseInt(document.getElementById('csv-date-col').value);
+  const ai  = parseInt(document.getElementById('csv-amount-col').value);
   const dci = parseInt(document.getElementById('csv-desc-col').value);
+  const ci  = parseInt(document.getElementById('csv-credit-col').value); // -1 = not used
   const fallbackCat = document.getElementById('csv-cat-col').value || 'Uncategorized';
-  const progress = document.getElementById('csv-progress');
-  progress.style.display = 'inline';
 
-  let added = 0, autoCat = 0;
-  const newExpenses = [];
+  // Lock buttons so import can't be triggered twice
+  const importBtn = document.getElementById('import-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing…'; }
+  if (cancelBtn) { cancelBtn.disabled = true; }
+
+  let added = 0, autoCat = 0, refunds = 0;
+  const newTransactions = [];
+
   for (const row of state.csvRows) {
+    // Parse the debit/charge amount
     const rawAmt = (row[ai]||'').replace(/[$,()]/g,'').trim();
-    const amount = Math.abs(parseFloat(rawAmt));
+    let amount = parseFloat(rawAmt);
+
+    // If a credit/refund column is mapped and this row has a value there,
+    // treat it as a negative (refund) transaction instead
+    let isRefund = false;
+    if (ci >= 0 && row[ci]) {
+      const rawCredit = (row[ci]||'').replace(/[$,()]/g,'').trim();
+      const creditAmt = parseFloat(rawCredit);
+      if (!isNaN(creditAmt) && creditAmt !== 0) {
+        amount = -Math.abs(creditAmt); // store as negative to indicate refund
+        isRefund = true;
+        refunds++;
+      }
+    }
+
+    // Skip rows where neither column has a usable number
     if (isNaN(amount) || amount === 0) continue;
+
+    // Parse the date, falling back to raw string if it can't be parsed
     const dateRaw = row[di]||'';
     let date = '';
     try { const d = new Date(dateRaw); if (!isNaN(d)) date = d.toISOString().split('T')[0]; } catch{}
     if (!date) date = dateRaw;
+
     const description = row[dci]||'';
+
+    // Apply rules to auto-categorize — fallback to chosen fallback category
     const ruleMatch = applyRules(description);
     if (ruleMatch) autoCat++;
     const category = ruleMatch || fallbackCat;
-    newExpenses.push({ date, amount, category, description, memo: '', who: 'Import' });
+
+    newTransactions.push({ date, amount, category, description, memo: '', who: 'Import' });
     added++;
   }
 
-  // Add all at once — no per-row await loop
-  state.expenses.push(...newExpenses);
+  // Push all new transactions at once — no slow per-row loop
+  state.expenses.push(...newTransactions);
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
   renderDashboard();
   renderExpenseTable();
 
-  // Sync to sheet in one call
+  // Sync to Google Sheets in a single replaceExpenses call
   if (state.sheetUrl) {
     try {
       const timeout = new Promise((_, rej) => setTimeout(() => rej(), 15000));
       await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-    } catch { /* silent — data is safe locally */ }
+    } catch { /* silent — data is safe locally, will sync on next load */ }
   }
 
-  progress.style.display = 'none';
+  // Unlock buttons
+  if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Import Rows'; }
+  if (cancelBtn) { cancelBtn.disabled = false; }
 
-  // Show success, hide the preview, reset file input
+  // Hide the preview and reset the file input so the same file can be re-imported if needed
   document.getElementById('csv-preview').style.display = 'none';
   document.getElementById('csv-input').value = '';
   state.csvRows = []; state.csvHeaders = [];
 
-  const uncat = added - autoCat;
+  // Show a summary message
+  const uncat = added - autoCat - refunds;
+  const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
   const successEl = document.getElementById('csv-success');
   successEl.style.display = 'block';
   successEl.innerHTML = `<div class="status-msg success" style="display:block;">
-    ✓ Imported ${added} transaction${added!==1?'s':''}${autoCat > 0 ? ` — ${autoCat} auto-categorized, ` : ' — '}${uncat > 0 ? `<strong>${uncat} need categorizing</strong> (see Expenses → Uncategorized filter)` : 'all categorized!'}.
+    ✓ Imported ${added} transaction${added!==1?'s':''}${refundNote}${autoCat > 0 ? ` — ${autoCat} auto-categorized` : ''}${uncat > 0 ? `, <strong>${uncat} need categorizing</strong> (see Transactions → Uncategorized filter)` : ', all categorized!'}.
   </div>`;
   setTimeout(() => { successEl.style.display = 'none'; }, 8000);
 }
 
 // ─── Budget Editor (grouped, drag-and-drop) ──────────────────────────
+// Categories are organized into named groups (Giving, Housing, etc.).
+// Both groups and items within a group can be reordered by dragging the ⠿ handle.
+// getGroups() returns groups in their saved order, appending any unknown groups.
+// renderBudgetEditor() rebuilds the full editor UI from state.categories.
 let dragSrc = null; // { type:'item'|'group', groupName, catIndex }
 
 function getGroups() {
@@ -1535,6 +1634,9 @@ function deleteGroup(grp) {
 }
 
 // ─── Drag and Drop ───────────────────────────────────────────────────
+// Group drag: dragging the ⠿ handle on a group header reorders entire groups.
+// Item drag: dragging the ⠿ handle on a row reorders items within or between groups.
+// stopPropagation on item events prevents item drags from triggering group drag handlers.
 function onGroupDragStart(e, grp) {
   dragSrc = { type: 'group', groupName: grp };
   e.dataTransfer.effectAllowed = 'move';
@@ -1605,6 +1707,8 @@ function onDragEnd(e) {
   dragSrc = null;
 }
 
+// Saves categories + group order to localStorage and syncs to Sheets.
+// Also refreshes the category dropdown and re-renders the dashboard.
 async function saveBudgets() {
   state.groupOrder = getGroups();
   localStorage.setItem('budget_cats', JSON.stringify(state.categories));
@@ -1630,6 +1734,9 @@ async function saveBudgets() {
 }
 
 // ─── Rules ───────────────────────────────────────────────────────────
+// Rules are plain text match strings. During CSV import, each transaction
+// description is checked against rules top-to-bottom; the first match wins.
+// applyRules() returns the matched category name, or null if none match.
 function renderRulesEditor() {
   const el = document.getElementById('rules-editor');
   if (!el) return;
@@ -1679,6 +1786,9 @@ async function saveRules() {
 }
 
 // ─── Filters ─────────────────────────────────────────────────────────
+// Saved filters are named subsets of categories (e.g. "Michelle" = her categories).
+// They appear as chip buttons on both the Dashboard and Transactions tab.
+// Filter selections are not persisted — they reset on page load.
 function renderFiltersEditor() {
   const el = document.getElementById('filters-editor');
   if (!el) return;
@@ -1741,6 +1851,8 @@ async function saveFilters() {
   setTimeout(() => { msg.style.display = 'none'; }, 3500);
 }
 
+// ─── Utilities ───────────────────────────────────────────────────────
+// applyRules: walks the rules list and returns the first matching category.
 function applyRules(description) {
   if (!description || !state.rules.length) return null;
   const lower = description.toLowerCase();
@@ -1750,80 +1862,13 @@ function applyRules(description) {
   return null;
 }
 
+// escHtml: sanitizes strings before inserting into innerHTML to prevent XSS.
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
-
+// fmt: formats a number as a 2-decimal dollar amount string (no $ sign).
 function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
-// --- Patch: disable buttons during CSV import ---
-const _origImportCSV = importCSV;
-importCSV = async function() {
-  const importBtn = document.getElementById('import-btn');
-  const cancelBtn = document.getElementById('cancel-btn');
-  if (importBtn) importBtn.disabled = true;
-  if (cancelBtn) cancelBtn.disabled = true;
-  try {
-    await _origImportCSV();
-  } finally {
-    if (importBtn) importBtn.disabled = false;
-    if (cancelBtn) cancelBtn.disabled = false;
-  }
-};
-
-const _origCancelCSV = cancelCSV;
-cancelCSV = function() {
-  const importBtn = document.getElementById('import-btn');
-  const cancelBtn = document.getElementById('cancel-btn');
-  if (importBtn) importBtn.disabled = false;
-  if (cancelBtn) cancelBtn.disabled = false;
-  _origCancelCSV();
-};
-
-
-// --- Patch: batching UI updates + loading overlay ---
-function showLoading() {
-  const el = document.getElementById('loading-overlay');
-  if (el) el.style.display = 'flex';
-}
-function hideLoading() {
-  const el = document.getElementById('loading-overlay');
-  if (el) el.style.display = 'none';
-}
-
-const __origImportCSV2 = importCSV;
-importCSV = async function() {
-  const importBtn = document.getElementById('import-btn');
-  const cancelBtn = document.getElementById('cancel-btn');
-
-  if (importBtn) importBtn.disabled = true;
-  if (cancelBtn) cancelBtn.disabled = true;
-  showLoading();
-
-  await new Promise(r => setTimeout(r, 50));
-
-  try {
-    await __origImportCSV2();
-  } finally {
-    hideLoading();
-    if (importBtn) importBtn.disabled = false;
-    if (cancelBtn) cancelBtn.disabled = false;
-  }
-};
-
 </script>
-
-<div id="loading-overlay" style="
-  position: fixed;
-  top:0; left:0; width:100%; height:100%;
-  background: rgba(255,255,255,0.7);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:9999;
-  font-size:20px;
-">
-  <div>Importing...</div>
-</div>
 
 </body>
 </html>
