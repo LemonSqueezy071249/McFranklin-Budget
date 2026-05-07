@@ -203,9 +203,13 @@
   .csv-map-grid .csv-map-full { grid-column: 1 / -1; }
   @media (max-width: 520px) { .csv-map-grid { grid-template-columns: 1fr; } .csv-map-grid .csv-map-full { grid-column: 1; } }
 
-  /* Rules editor — description | action dropdown | category | delete */
-  .rule-row { display: grid; grid-template-columns: 1fr 140px 1fr 36px; align-items: center; gap: 8px; margin-bottom: 6px; }
-  @media (max-width: 600px) { .rule-row { grid-template-columns: 1fr 110px 36px; } .rule-row .rule-cat-col { display: none; } }
+  /* Rules editor — drag handle | description | action dropdown | category | delete */
+  .rule-row { display: grid; grid-template-columns: 24px 1fr 170px 1fr 36px; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .rule-drag-handle { color: var(--border); font-size: 14px; cursor: grab; text-align: center; transition: color 0.15s; }
+  .rule-row:hover .rule-drag-handle { color: var(--muted); }
+  .rule-row.dragging { opacity: 0.35; }
+  .rule-row.drag-over-rule { border-top: 2px solid var(--accent); }
+  @media (max-width: 640px) { .rule-row { grid-template-columns: 24px 1fr 150px 36px; } .rule-row .rule-cat-col { display: none; } }
   .budget-group-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
   .budget-group-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
   .budget-group-header .drag-handle { color: var(--muted); font-size: 16px; cursor: grab; flex-shrink: 0; line-height: 1; }
@@ -380,6 +384,7 @@
       <p class="text-sm text-muted" style="margin-bottom:1.25rem;">During CSV import, each transaction description is checked against these rules top-to-bottom — first match wins. Rules can assign a category or delete the transaction entirely (useful for autopay or payment rows you never want to see).</p>
 
       <div class="rule-row" style="margin-bottom:8px;">
+        <div></div>
         <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">If description contains…</div>
         <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">Action</div>
         <div class="rule-cat-col" style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">Category</div>
@@ -390,6 +395,7 @@
       <div style="margin-top:1rem;">
         <button class="btn btn-primary" onclick="saveRules()">Save rules</button>
         <div id="rules-status" class="status-msg"></div>
+        <div id="rules-apply-prompt" style="display:none;"></div>
       </div>
     </div>
   </div>
@@ -1759,7 +1765,14 @@ function renderRulesEditor() {
   let html = '';
   state.rules.forEach((r, i) => {
     const isDelete = r.action === 'delete';
-    html += `<div class="rule-row" id="rule-row-${i}">
+    html += `<div class="rule-row" id="rule-row-${i}"
+        draggable="true"
+        ondragstart="onRuleDragStart(event,${i})"
+        ondragover="onRuleDragOver(event)"
+        ondragleave="onRuleDragLeave(event)"
+        ondrop="onRuleDrop(event,${i})"
+        ondragend="onRuleDragEnd(event)">
+      <span class="rule-drag-handle" title="Drag to reorder">⠿</span>
       <input type="text" value="${escHtml(r.contains)}" onchange="updateRule(${i},'contains',this.value)" placeholder="e.g. AUTOPAY">
       <select onchange="updateRuleAction(${i},this.value)">
         <option value="categorize" ${!isDelete?'selected':''}>Categorize as…</option>
@@ -1777,6 +1790,32 @@ function renderRulesEditor() {
     </div>`;
   });
   el.innerHTML = html;
+}
+
+let ruleDragSrc = null;
+function onRuleDragStart(e, i) {
+  ruleDragSrc = i;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging');
+}
+function onRuleDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over-rule');
+}
+function onRuleDragLeave(e) { e.currentTarget.classList.remove('drag-over-rule'); }
+function onRuleDrop(e, targetIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-rule');
+  if (ruleDragSrc === null || ruleDragSrc === targetIdx) return;
+  const moved = state.rules.splice(ruleDragSrc, 1)[0];
+  const newIdx = ruleDragSrc < targetIdx ? targetIdx - 1 : targetIdx;
+  state.rules.splice(newIdx, 0, moved);
+  ruleDragSrc = null;
+  renderRulesEditor();
+}
+function onRuleDragEnd(e) {
+  e.currentTarget.classList.remove('dragging', 'drag-over-rule');
+  ruleDragSrc = null;
 }
 
 function updateRule(i, key, val) { state.rules[i][key] = val; }
@@ -1809,7 +1848,69 @@ async function saveRules() {
   } else {
     msg.className = 'status-msg success'; msg.textContent = `✓ ${state.rules.length} rule${state.rules.length!==1?'s':''} saved locally.`;
   }
+
+  // After saving, check if any existing transactions are uncategorized and a
+  // categorize-type rule could now match them. If so, offer to apply.
+  const knownCats = new Set(state.categories.map(c => c.name));
+  const uncatTransactions = state.expenses.filter(e =>
+    !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category)
+  );
+  const categorizeRules = state.rules.filter(r => r.action !== 'delete' && r.contains);
+  const matchable = uncatTransactions.filter(e => applyRules(e.description) && applyRules(e.description) !== '__delete__');
+
+  if (matchable.length > 0) {
+    // Small delay so the save message shows first
+    setTimeout(() => {
+      const applyEl = document.getElementById('rules-apply-prompt');
+      if (applyEl) {
+        applyEl.style.display = 'block';
+        applyEl.innerHTML = `<div style="margin-top:10px; padding:10px 14px; background:var(--accent-light); border:1px solid var(--accent-mid); border-radius:var(--radius); font-size:13px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <span>These rules match <strong>${matchable.length} uncategorized transaction${matchable.length!==1?'s':''}</strong>. Apply now?</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;" onclick="applyRulesToUncategorized()">Apply rules</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:5px 14px;" onclick="document.getElementById('rules-apply-prompt').style.display='none'">Not now</button>
+          </div>
+        </div>`;
+      }
+    }, 400);
+  }
+
   setTimeout(() => { msg.style.display = 'none'; }, 3500);
+}
+
+// Applies all categorize-type rules to currently uncategorized transactions,
+// then syncs the updated list to Google Sheets.
+async function applyRulesToUncategorized() {
+  const knownCats = new Set(state.categories.map(c => c.name));
+  let changed = 0, deleted = 0;
+
+  state.expenses = state.expenses.filter(e => {
+    const isUncat = !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
+    if (!isUncat) return true;
+    const match = applyRules(e.description);
+    if (match === '__delete__') { deleted++; return false; }
+    if (match) { e.category = match; changed++; }
+    return true;
+  });
+
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderExpenseTable();
+  renderDashboard();
+
+  // Sync to Sheets
+  if (state.sheetUrl) {
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 15000));
+      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
+    } catch { /* silent */ }
+  }
+
+  const promptEl = document.getElementById('rules-apply-prompt');
+  if (promptEl) {
+    const deletedNote = deleted > 0 ? `, ${deleted} deleted` : '';
+    promptEl.innerHTML = `<div class="status-msg success" style="display:block; margin-top:10px;">✓ Updated ${changed} transaction${changed!==1?'s':''}${deletedNote}.</div>`;
+    setTimeout(() => { promptEl.style.display = 'none'; }, 4000);
+  }
 }
 
 // ─── Filters ─────────────────────────────────────────────────────────
