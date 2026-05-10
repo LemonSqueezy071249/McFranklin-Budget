@@ -280,7 +280,7 @@
         </div>
         <div class="form-group">
           <label class="field-label">Amount ($)</label>
-          <input type="number" id="exp-amount" placeholder="0.00" step="0.01" min="0">
+          <input type="number" id="exp-amount" placeholder="0.00" step="0.01">
         </div>
         <div class="form-group">
           <label class="field-label">Category</label>
@@ -1044,7 +1044,7 @@ function renderExpenseTable() {
         : `<span class="badge">${escHtml(e.category||'')}</span>`
       }</td>
       <td class="text-muted">${escHtml(e.who||'')}</td>
-      <td style="text-align:right; font-weight:500;">$${fmt(e.amount)}</td>
+      <td style="text-align:right; font-weight:500; ${parseFloat(e.amount) < 0 ? 'color:var(--green-dark)' : ''}">${parseFloat(e.amount) < 0 ? `-$${fmt(Math.abs(e.amount))}` : `$${fmt(e.amount)}`}</td>
       <td style="white-space:nowrap; vertical-align:middle;">
         <div style="display:flex; gap:4px; justify-content:flex-end; align-items:center;">
           <button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
@@ -1125,7 +1125,7 @@ function renderSplitEditor(idx) {
       <select onchange="updateSplitLine(${li},'category',this.value)">
         ${state.categories.map(c => `<option value="${escHtml(c.name)}" ${c.name===l.category?'selected':''}>${escHtml(c.name)}</option>`).join('')}
       </select>
-      <input type="number" placeholder="Amount" value="${l.amount}" step="0.01" min="0"
+      <input type="number" placeholder="Amount" value="${l.amount}" step="0.01"
         onchange="updateSplitLine(${li},'amount',this.value)"
         onblur="autoFillLast(${li})">
       <button class="del-btn" onclick="removeSplitLine(${li})" style="font-size:14px;">✕</button>
@@ -1136,8 +1136,9 @@ function renderSplitEditor(idx) {
         onchange="updateSplitLine(${li},'memo',this.value)">
     </div>`).join('');
 
+  const totalDisplay = total < 0 ? `-$${fmt(Math.abs(total))}` : `$${fmt(total)}`;
   container.innerHTML = `<div class="split-editor">
-    <div class="split-header">Split $${fmt(total)} — ${escHtml(state.expenses[idx]?.description || '')}</div>
+    <div class="split-header">Split ${totalDisplay} — ${escHtml(state.expenses[idx]?.description || '')}</div>
     ${linesHtml}
     <div class="split-total-row">
       <button class="split-btn split-btn-add" onclick="addSplitLine()">+ Add line</button>
@@ -1159,12 +1160,13 @@ function updateSplitLine(li, key, val) {
 }
 
 function autoFillLast(li) {
-  // If this is the last line and there's still remaining, fill it in
+  // If this is the last line and there's still unallocated amount, fill it in.
+  // Works for both positive (expenses) and negative (refunds) totals.
   const { total, lines } = splitState;
   if (li !== lines.length - 1) return;
   const allocatedExcludingLast = lines.slice(0, -1).reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const remaining = total - allocatedExcludingLast;
-  if (remaining > 0 && !lines[li].amount) {
+  if (Math.abs(remaining) > 0.005 && !lines[li].amount) {
     splitState.lines[li].amount = remaining.toFixed(2);
     renderSplitEditor(splitState.idx);
   }
@@ -1247,7 +1249,7 @@ function openEdit(idx) {
     </div>
     <div class="form-group">
       <label class="field-label">Amount ($)</label>
-      <input type="number" id="edit-amount-${idx}" value="${e.amount||''}" step="0.01" min="0">
+      <input type="number" id="edit-amount-${idx}" value="${e.amount||''}" step="0.01">
     </div>
     <div class="form-group">
       <label class="field-label">Category</label>
@@ -1292,7 +1294,7 @@ async function saveEdit(idx) {
   const description = document.getElementById(`edit-desc-${idx}`)?.value.trim();
   const memo = document.getElementById(`edit-memo-${idx}`)?.value.trim();
 
-  if (!date || isNaN(amount) || amount <= 0 || !category) return;
+  if (!date || isNaN(amount) || amount === 0 || !category) return;
 
   state.expenses[idx] = { ...state.expenses[idx], date, amount, category, who, description, memo };
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
@@ -1324,7 +1326,7 @@ async function addExpense() {
   const who = document.getElementById('exp-who').value;
   const msg = document.getElementById('add-status');
 
-  if (!date || isNaN(amount) || amount <= 0 || !category) {
+  if (!date || isNaN(amount) || amount === 0 || !category) {
     msg.className = 'status-msg error'; msg.textContent = 'Please fill in date, amount, and category.'; return;
   }
 
