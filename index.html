@@ -236,12 +236,18 @@
       <div class="period-toggle">
         <label>View:</label>
         <button class="toggle-btn active" onclick="setPeriod('monthly')">This month</button>
+        <button class="toggle-btn" onclick="setPeriod('lastmonth')">Last month</button>
         <button class="toggle-btn" onclick="setPeriod('ytd')">Year to date</button>
         <button class="toggle-btn" onclick="setPeriod('yearly')">Full year</button>
-        <button class="toggle-btn" onclick="setPeriod('custom')" id="custom-btn">Custom month</button>
+        <button class="toggle-btn" onclick="setPeriod('custom')" id="custom-btn">Custom</button>
         <select id="month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setCustomMonth(this.value)"></select>
       </div>
-      <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
+      <div id="filter-bar-wrap" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        <button onclick="toggleFilterBar()" id="filter-bar-toggle" style="display:none; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:20px; padding:5px 13px; font-size:13px; font-weight:500; color:var(--text-2); cursor:pointer; font-family:var(--sans); box-shadow:var(--shadow-sm); transition:all .15s;">
+          Filters <span id="filter-bar-badge" style="display:none; background:var(--accent); color:white; border-radius:10px; padding:1px 7px; font-size:11px; margin-left:3px;"></span>
+        </button>
+        <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
+      </div>
     </div>
     <div id="categories-view"></div>
   </div>
@@ -252,6 +258,7 @@
         <div class="period-toggle" id="exp-period-toggle">
           <label>Period:</label>
           <button class="toggle-btn active" onclick="setExpPeriod('monthly',event)">This month</button>
+          <button class="toggle-btn" onclick="setExpPeriod('lastmonth',event)">Last month</button>
           <button class="toggle-btn" onclick="setExpPeriod('ytd',event)">Year to date</button>
           <button class="toggle-btn" onclick="setExpPeriod('yearly',event)">Full year</button>
           <button class="toggle-btn" onclick="setExpPeriod('all',event)">All</button>
@@ -731,10 +738,13 @@ function setCustomMonth(val) {
 function updatePeriodLabel() {
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   let label = '';
   if (state.viewPeriod === 'monthly') {
     state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear();
     label = months[now.getMonth()] + ' ' + now.getFullYear();
+  } else if (state.viewPeriod === 'lastmonth') {
+    label = months[last.getMonth()] + ' ' + last.getFullYear();
   } else if (state.viewPeriod === 'yearly') {
     label = 'Full year ' + now.getFullYear();
   } else if (state.viewPeriod === 'ytd') {
@@ -806,17 +816,17 @@ function renderExpFilterChips() {
 
 function getExpFilteredExpenses() {
   const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const knownCats = new Set(state.categories.map(c => c.name));
   return state.expenses.filter(e => {
-    // Period filter
     if (e.date) {
       const d = new Date(e.date + 'T12:00:00');
-      if (state.expPeriod === 'monthly' && !(d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear())) return false;
-      if (state.expPeriod === 'ytd' && !(d.getFullYear()===now.getFullYear()&&d<=now)) return false;
-      if (state.expPeriod === 'yearly' && d.getFullYear()!==now.getFullYear()) return false;
-      if (state.expPeriod === 'custom' && !(d.getMonth()===state.expMonth&&d.getFullYear()===state.expYear)) return false;
+      if (state.expPeriod === 'monthly'   && !(d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear())) return false;
+      if (state.expPeriod === 'lastmonth' && !(d.getMonth()===last.getMonth()&&d.getFullYear()===last.getFullYear())) return false;
+      if (state.expPeriod === 'ytd'       && !(d.getFullYear()===now.getFullYear()&&d<=now)) return false;
+      if (state.expPeriod === 'yearly'    && d.getFullYear()!==now.getFullYear()) return false;
+      if (state.expPeriod === 'custom'    && !(d.getMonth()===state.expMonth&&d.getFullYear()===state.expYear)) return false;
     }
-    // Category filter
     if (state.expFilter === '__uncategorized__') {
       return !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
     }
@@ -833,10 +843,12 @@ function getExpFilteredExpenses() {
 // time period (monthly, YTD, yearly, or custom month).
 function getFilteredExpenses() {
   const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   return state.expenses.filter(e => {
     if (!e.date) return false;
     const d = new Date(e.date + 'T12:00:00');
     if (state.viewPeriod === 'monthly') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if (state.viewPeriod === 'lastmonth') return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
     if (state.viewPeriod === 'yearly') return d.getFullYear() === now.getFullYear();
     if (state.viewPeriod === 'ytd') return d.getFullYear() === now.getFullYear() && d <= now;
     if (state.viewPeriod === 'custom') return d.getMonth() === state.viewMonth && d.getFullYear() === state.viewYear;
@@ -849,12 +861,11 @@ function getBudgetForPeriod(cat) {
   const now = new Date();
   if (state.viewPeriod === 'yearly') return cat.period === 'yearly' ? b : b * 12;
   if (state.viewPeriod === 'ytd') {
-    // months elapsed so far this year (partial current month counts as full)
     const monthsElapsed = now.getMonth() + 1;
     return cat.period === 'yearly' ? (b / 12) * monthsElapsed : b * monthsElapsed;
   }
-  if (state.viewPeriod === 'monthly' || state.viewPeriod === 'custom') return cat.period === 'yearly' ? b / 12 : b;
-  return b;
+  // monthly, lastmonth, custom all use the single-month budget
+  return cat.period === 'yearly' ? b / 12 : b;
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────
@@ -862,14 +873,53 @@ function getBudgetForPeriod(cat) {
 // setFilter applies a named filter or clears it (null = All).
 // getVisibleCategories returns the category list after applying the active filter.
 // renderDashboard redraws summary cards and all category rows including YTD context.
+// Rebuilds the dashboard filter chip row.
+// When there are saved filters, shows a "Filters" toggle button.
+// The chips are collapsed by default and expand on click.
 function renderFilterBar() {
   const bar = document.getElementById('filter-bar');
+  const toggle = document.getElementById('filter-bar-toggle');
+  const badge = document.getElementById('filter-bar-badge');
   if (!bar) return;
+
+  const hasFilters = state.filters.length > 0;
+
+  // Show/hide the toggle button
+  if (toggle) toggle.style.display = hasFilters ? 'inline-flex' : 'none';
+
+  // Update badge with filter count
+  if (badge) {
+    badge.style.display = hasFilters ? 'inline' : 'none';
+    badge.textContent = state.filters.length;
+  }
+
+  // Update toggle label to reflect open/closed state
+  const isOpen = bar.style.display !== 'none';
+  if (toggle) {
+    toggle.style.borderColor = isOpen ? 'var(--accent)' : '';
+    toggle.style.color = isOpen ? 'var(--accent)' : '';
+    const labelText = isOpen ? 'Filters ▲' : 'Filters ▼';
+    toggle.childNodes[0].textContent = labelText + ' ';
+  }
+
   let html = `<button class="filter-chip ${!state.activeFilter ? 'active' : ''}" onclick="setFilter(null)">All</button>`;
   state.filters.forEach(f => {
     html += `<button class="filter-chip ${state.activeFilter === f.name ? 'active' : ''}" onclick="setFilter('${escHtml(f.name)}')">${escHtml(f.name)}</button>`;
   });
   bar.innerHTML = html;
+
+  // If no filters exist, always show the bar; otherwise respect collapsed state
+  if (!hasFilters) {
+    bar.style.display = 'flex';
+  }
+}
+
+function toggleFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  if (!bar) return;
+  const isOpen = bar.style.display !== 'none';
+  bar.style.display = isOpen ? 'none' : 'flex';
+  renderFilterBar(); // re-render to update toggle label
 }
 
 function setFilter(name) {
@@ -886,6 +936,12 @@ function getVisibleCategories() {
 }
 
 function renderDashboard() {
+  // Collapse filter bar by default on first render if filters exist
+  const bar = document.getElementById('filter-bar');
+  if (bar && bar.dataset.initialized !== 'true') {
+    bar.style.display = state.filters.length > 0 ? 'none' : 'flex';
+    bar.dataset.initialized = 'true';
+  }
   renderFilterBar();
   const filtered = getFilteredExpenses();
   const visibleCats = getVisibleCategories();
