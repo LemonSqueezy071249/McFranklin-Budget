@@ -242,12 +242,7 @@
         <button class="toggle-btn" onclick="setPeriod('custom')" id="custom-btn">Custom</button>
         <select id="month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setCustomMonth(this.value)"></select>
       </div>
-      <div id="filter-bar-wrap" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-        <button onclick="toggleFilterBar()" id="filter-bar-toggle" style="display:none; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:20px; padding:5px 13px; font-size:13px; font-weight:500; color:var(--text-2); cursor:pointer; font-family:var(--sans); box-shadow:var(--shadow-sm); transition:all .15s;">
-          Filters <span id="filter-bar-badge" style="display:none; background:var(--accent); color:white; border-radius:10px; padding:1px 7px; font-size:11px; margin-left:3px;"></span>
-        </button>
-        <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
-      </div>
+      <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
     </div>
     <div id="categories-view"></div>
   </div>
@@ -873,53 +868,15 @@ function getBudgetForPeriod(cat) {
 // setFilter applies a named filter or clears it (null = All).
 // getVisibleCategories returns the category list after applying the active filter.
 // renderDashboard redraws summary cards and all category rows including YTD context.
-// Rebuilds the dashboard filter chip row.
-// When there are saved filters, shows a "Filters" toggle button.
-// The chips are collapsed by default and expand on click.
+// Rebuilds the dashboard filter chip row — always flat, one chip per filter.
 function renderFilterBar() {
   const bar = document.getElementById('filter-bar');
-  const toggle = document.getElementById('filter-bar-toggle');
-  const badge = document.getElementById('filter-bar-badge');
   if (!bar) return;
-
-  const hasFilters = state.filters.length > 0;
-
-  // Show/hide the toggle button
-  if (toggle) toggle.style.display = hasFilters ? 'inline-flex' : 'none';
-
-  // Update badge with filter count
-  if (badge) {
-    badge.style.display = hasFilters ? 'inline' : 'none';
-    badge.textContent = state.filters.length;
-  }
-
-  // Update toggle label to reflect open/closed state
-  const isOpen = bar.style.display !== 'none';
-  if (toggle) {
-    toggle.style.borderColor = isOpen ? 'var(--accent)' : '';
-    toggle.style.color = isOpen ? 'var(--accent)' : '';
-    const labelText = isOpen ? 'Filters ▲' : 'Filters ▼';
-    toggle.childNodes[0].textContent = labelText + ' ';
-  }
-
   let html = `<button class="filter-chip ${!state.activeFilter ? 'active' : ''}" onclick="setFilter(null)">All</button>`;
   state.filters.forEach(f => {
     html += `<button class="filter-chip ${state.activeFilter === f.name ? 'active' : ''}" onclick="setFilter('${escHtml(f.name)}')">${escHtml(f.name)}</button>`;
   });
   bar.innerHTML = html;
-
-  // If no filters exist, always show the bar; otherwise respect collapsed state
-  if (!hasFilters) {
-    bar.style.display = 'flex';
-  }
-}
-
-function toggleFilterBar() {
-  const bar = document.getElementById('filter-bar');
-  if (!bar) return;
-  const isOpen = bar.style.display !== 'none';
-  bar.style.display = isOpen ? 'none' : 'flex';
-  renderFilterBar(); // re-render to update toggle label
 }
 
 function setFilter(name) {
@@ -936,12 +893,6 @@ function getVisibleCategories() {
 }
 
 function renderDashboard() {
-  // Collapse filter bar by default on first render if filters exist
-  const bar = document.getElementById('filter-bar');
-  if (bar && bar.dataset.initialized !== 'true') {
-    bar.style.display = state.filters.length > 0 ? 'none' : 'flex';
-    bar.dataset.initialized = 'true';
-  }
   renderFilterBar();
   const filtered = getFilteredExpenses();
   const visibleCats = getVisibleCategories();
@@ -1992,21 +1943,37 @@ function renderFiltersEditor() {
   }
   let html = '';
   state.filters.forEach((f, fi) => {
-    html += `<div class="filter-editor-row">
-      <h4>
-        <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)" placeholder="Filter name (e.g. Michelle)" style="font-size:13px;font-weight:500;border:none;background:none;padding:0;width:200px;outline:none;color:var(--text);">
-        <button class="del-btn" onclick="removeFilter(${fi})">✕ Remove</button>
-      </h4>
-      <div class="filter-cat-grid">
+    const checkedCount = (f.categories||[]).length;
+    const isOpen = f._open || false;
+    html += `<div class="filter-editor-row" id="filter-row-${fi}">
+      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleFilterRow(${fi})">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)"
+            onclick="event.stopPropagation()"
+            placeholder="Filter name (e.g. Michelle)"
+            style="font-size:13px; font-weight:600; border:none; background:none; padding:0; width:160px; outline:none; color:var(--text);">
+          <span style="font-size:12px; color:var(--muted);">${checkedCount} categor${checkedCount!==1?'ies':'y'}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:12px; color:var(--muted);">${isOpen ? '▲ Collapse' : '▼ Edit'}</span>
+          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">✕</button>
+        </div>
+      </div>
+      ${isOpen ? `<div class="filter-cat-grid" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         ${state.categories.map(c => `
           <label class="filter-cat-check">
             <input type="checkbox" ${(f.categories||[]).includes(c.name)?'checked':''} onchange="toggleFilterCat(${fi},'${escHtml(c.name)}',this.checked)">
             <span>${escHtml(c.name)}</span>
           </label>`).join('')}
-      </div>
+      </div>` : ''}
     </div>`;
   });
   el.innerHTML = html;
+}
+
+function toggleFilterRow(fi) {
+  state.filters[fi]._open = !state.filters[fi]._open;
+  renderFiltersEditor();
 }
 
 function updateFilterName(i, val) { state.filters[i].name = val; }
@@ -2021,9 +1988,9 @@ function toggleFilterCat(fi, catName, checked) {
   else { state.filters[fi].categories = state.filters[fi].categories.filter(c => c !== catName); }
 }
 function addFilterRow() {
-  state.filters.push({ name: '', categories: [] });
+  state.filters.push({ name: '', categories: [], _open: true });
   renderFiltersEditor();
-  setTimeout(() => document.querySelector(`#filters-editor .filter-editor-row:last-child input[type=text]`)?.focus(), 50);
+  setTimeout(() => document.querySelector(`#filter-row-${state.filters.length-1} input[type=text]`)?.focus(), 50);
 }
 async function saveFilters() {
   localStorage.setItem('budget_filters', JSON.stringify(state.filters));
