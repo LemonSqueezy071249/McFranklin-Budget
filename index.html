@@ -130,6 +130,13 @@
   .status-msg { font-size: 13px; padding: 9px 14px; border-radius: var(--radius-sm); margin-top: 10px; display: none; font-weight: 500; }
   .status-msg.success { background: var(--green-light); color: var(--green-dark); display: block; }
   .status-msg.error { background: var(--danger-light); color: var(--danger); display: block; }
+
+  /* Button save states */
+  .btn-saving { background: var(--muted) !important; box-shadow: none !important; transform: none !important; cursor: default !important; }
+  .btn-saved  { background: var(--green-dark) !important; box-shadow: 0 2px 8px rgba(36,138,61,0.3) !important; cursor: default !important; }
+  .btn-error  { background: var(--danger) !important; box-shadow: 0 2px 8px rgba(255,59,48,0.3) !important; }
+  @keyframes btn-spin { to { transform: rotate(360deg); } }
+  .btn-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: btn-spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
   .empty-state { text-align: center; padding: 3.5rem 1rem; color: var(--muted); }
   .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
   .flex { display: flex; } .items-center { align-items: center; } .justify-between { justify-content: space-between; } .gap-2 { gap: 8px; } .mt-1 { margin-top: 6px; } .mb-1 { margin-bottom: 8px; } .text-sm { font-size: 13px; } .text-muted { color: var(--muted); } .ytd-note { font-size: 12px; color: var(--muted); font-style: italic; margin-left: 4px; }
@@ -236,9 +243,10 @@
       <div class="period-toggle">
         <label>View:</label>
         <button class="toggle-btn active" onclick="setPeriod('monthly')">This month</button>
+        <button class="toggle-btn" onclick="setPeriod('lastmonth')">Last month</button>
         <button class="toggle-btn" onclick="setPeriod('ytd')">Year to date</button>
         <button class="toggle-btn" onclick="setPeriod('yearly')">Full year</button>
-        <button class="toggle-btn" onclick="setPeriod('custom')" id="custom-btn">Custom month</button>
+        <button class="toggle-btn" onclick="setPeriod('custom')" id="custom-btn">Custom</button>
         <select id="month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setCustomMonth(this.value)"></select>
       </div>
       <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
@@ -252,6 +260,7 @@
         <div class="period-toggle" id="exp-period-toggle">
           <label>Period:</label>
           <button class="toggle-btn active" onclick="setExpPeriod('monthly',event)">This month</button>
+          <button class="toggle-btn" onclick="setExpPeriod('lastmonth',event)">Last month</button>
           <button class="toggle-btn" onclick="setExpPeriod('ytd',event)">Year to date</button>
           <button class="toggle-btn" onclick="setExpPeriod('yearly',event)">Full year</button>
           <button class="toggle-btn" onclick="setExpPeriod('all',event)">All</button>
@@ -307,7 +316,6 @@
         <button class="btn btn-primary" onclick="addExpense()">Save Expense</button>
         <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
       </div>
-      <div id="add-status" class="status-msg"></div>
     </div>
 
     <div class="form-card">
@@ -354,7 +362,6 @@
       <button class="btn btn-secondary" style="font-size:13px; margin-top:10px;" onclick="addRuleRow()">+ Add rule</button>
       <div style="margin-top:1rem;">
         <button class="btn btn-primary" onclick="saveRules()">Save rules</button>
-        <div id="rules-status" class="status-msg"></div>
         <div id="rules-apply-prompt" style="display:none;"></div>
       </div>
     </div>
@@ -368,7 +375,6 @@
       <button class="btn btn-secondary" style="font-size:13px; margin-top:10px;" onclick="addFilterRow()">+ Add filter</button>
       <div style="margin-top:1rem;">
         <button class="btn btn-primary" onclick="saveFilters()">Save filters</button>
-        <div id="filters-status" class="status-msg"></div>
       </div>
     </div>
 
@@ -410,7 +416,6 @@
       <div id="budget-editor"></div>
       <button class="add-group-btn" onclick="addGroupBlock()">+ Add new group</button>
       <button class="btn btn-primary" onclick="saveBudgets()">Save budgets</button>
-      <div id="budget-status" class="status-msg"></div>
     </div>
   </div>
 </div>
@@ -580,6 +585,41 @@ function doGet(e) {
 
 document.getElementById('apps-script-code').textContent = APPS_SCRIPT;
 
+// ─── Button Save State Utility ───────────────────────────────────────
+// Transforms a button through saving → saved → idle states.
+// Usage: await btnSave(btn, async () => { ...your save logic... });
+// Optional errorLabel shown if the promise rejects.
+async function btnSave(btn, work, { successLabel = '✓ Saved', errorLabel = '✗ Try again', resetMs = 2200 } = {}) {
+  const orig = btn.innerHTML;
+  const origClass = btn.className;
+
+  // Saving state
+  btn.disabled = true;
+  btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saving';
+  btn.innerHTML = `<span class="btn-spinner"></span>Saving…`;
+
+  try {
+    await work();
+    // Saved state
+    btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saved';
+    btn.innerHTML = `✓ Saved`;
+    setTimeout(() => {
+      btn.className = origClass;
+      btn.innerHTML = orig;
+      btn.disabled = false;
+    }, resetMs);
+  } catch (err) {
+    // Error state — show briefly then reset
+    btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-error';
+    btn.innerHTML = errorLabel;
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.className = origClass;
+      btn.innerHTML = orig;
+    }, 3000);
+  }
+}
+
 // ─── Init ────────────────────────────────────────────────────────────
 // Runs once on page load. Restores the sheet URL from localStorage,
 // kicks off a Sheets sync if connected, and renders all UI sections.
@@ -731,10 +771,13 @@ function setCustomMonth(val) {
 function updatePeriodLabel() {
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   let label = '';
   if (state.viewPeriod === 'monthly') {
     state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear();
     label = months[now.getMonth()] + ' ' + now.getFullYear();
+  } else if (state.viewPeriod === 'lastmonth') {
+    label = months[last.getMonth()] + ' ' + last.getFullYear();
   } else if (state.viewPeriod === 'yearly') {
     label = 'Full year ' + now.getFullYear();
   } else if (state.viewPeriod === 'ytd') {
@@ -806,17 +849,17 @@ function renderExpFilterChips() {
 
 function getExpFilteredExpenses() {
   const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const knownCats = new Set(state.categories.map(c => c.name));
   return state.expenses.filter(e => {
-    // Period filter
     if (e.date) {
       const d = new Date(e.date + 'T12:00:00');
-      if (state.expPeriod === 'monthly' && !(d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear())) return false;
-      if (state.expPeriod === 'ytd' && !(d.getFullYear()===now.getFullYear()&&d<=now)) return false;
-      if (state.expPeriod === 'yearly' && d.getFullYear()!==now.getFullYear()) return false;
-      if (state.expPeriod === 'custom' && !(d.getMonth()===state.expMonth&&d.getFullYear()===state.expYear)) return false;
+      if (state.expPeriod === 'monthly'   && !(d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear())) return false;
+      if (state.expPeriod === 'lastmonth' && !(d.getMonth()===last.getMonth()&&d.getFullYear()===last.getFullYear())) return false;
+      if (state.expPeriod === 'ytd'       && !(d.getFullYear()===now.getFullYear()&&d<=now)) return false;
+      if (state.expPeriod === 'yearly'    && d.getFullYear()!==now.getFullYear()) return false;
+      if (state.expPeriod === 'custom'    && !(d.getMonth()===state.expMonth&&d.getFullYear()===state.expYear)) return false;
     }
-    // Category filter
     if (state.expFilter === '__uncategorized__') {
       return !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
     }
@@ -833,10 +876,12 @@ function getExpFilteredExpenses() {
 // time period (monthly, YTD, yearly, or custom month).
 function getFilteredExpenses() {
   const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   return state.expenses.filter(e => {
     if (!e.date) return false;
     const d = new Date(e.date + 'T12:00:00');
     if (state.viewPeriod === 'monthly') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if (state.viewPeriod === 'lastmonth') return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
     if (state.viewPeriod === 'yearly') return d.getFullYear() === now.getFullYear();
     if (state.viewPeriod === 'ytd') return d.getFullYear() === now.getFullYear() && d <= now;
     if (state.viewPeriod === 'custom') return d.getMonth() === state.viewMonth && d.getFullYear() === state.viewYear;
@@ -849,12 +894,11 @@ function getBudgetForPeriod(cat) {
   const now = new Date();
   if (state.viewPeriod === 'yearly') return cat.period === 'yearly' ? b : b * 12;
   if (state.viewPeriod === 'ytd') {
-    // months elapsed so far this year (partial current month counts as full)
     const monthsElapsed = now.getMonth() + 1;
     return cat.period === 'yearly' ? (b / 12) * monthsElapsed : b * monthsElapsed;
   }
-  if (state.viewPeriod === 'monthly' || state.viewPeriod === 'custom') return cat.period === 'yearly' ? b / 12 : b;
-  return b;
+  // monthly, lastmonth, custom all use the single-month budget
+  return cat.period === 'yearly' ? b / 12 : b;
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────
@@ -862,6 +906,7 @@ function getBudgetForPeriod(cat) {
 // setFilter applies a named filter or clears it (null = All).
 // getVisibleCategories returns the category list after applying the active filter.
 // renderDashboard redraws summary cards and all category rows including YTD context.
+// Rebuilds the dashboard filter chip row — always flat, one chip per filter.
 function renderFilterBar() {
   const bar = document.getElementById('filter-bar');
   if (!bar) return;
@@ -1293,20 +1338,27 @@ async function saveEdit(idx) {
   const who = document.getElementById(`edit-who-${idx}`)?.value;
   const description = document.getElementById(`edit-desc-${idx}`)?.value.trim();
   const memo = document.getElementById(`edit-memo-${idx}`)?.value.trim();
+  const btn = document.querySelector(`#edit-row-${idx} .btn-primary`);
 
-  if (!date || isNaN(amount) || amount === 0 || !category) return;
+  if (!date || isNaN(amount) || amount === 0 || !category) {
+    if (btn) { btn.className = btn.className + ' btn-error'; btn.textContent = '✗ Fill in required fields'; setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save changes'; }, 2500); }
+    return;
+  }
 
   state.expenses[idx] = { ...state.expenses[idx], date, amount, category, who, description, memo };
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+
+  if (btn) {
+    await btnSave(btn, async () => {
+      if (state.sheetUrl) {
+        const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
+        await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
+      }
+    }, { resetMs: 1400 });
+  }
+
   renderExpenseTable();
   renderDashboard();
-
-  if (state.sheetUrl) {
-    try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-    } catch { /* silent */ }
-  }
 }
 // Populates the category <select> in the Add Transaction form
 // and the edit form with the current category list.
@@ -1324,29 +1376,26 @@ async function addExpense() {
   const description = document.getElementById('exp-desc').value.trim();
   const memo = document.getElementById('exp-memo').value.trim();
   const who = document.getElementById('exp-who').value;
-  const msg = document.getElementById('add-status');
+  const btn = document.querySelector('[onclick="addExpense()"]');
 
   if (!date || isNaN(amount) || amount === 0 || !category) {
-    msg.className = 'status-msg error'; msg.textContent = 'Please fill in date, amount, and category.'; return;
+    btn.className = btn.className + ' btn-error'; btn.textContent = '✗ Fill in date, amount & category';
+    setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save Transaction'; }, 2800);
+    return;
   }
 
   const exp = { date, amount, category, description, memo, who };
   state.expenses.push(exp);
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
   renderDashboard(); renderExpenseTable();
-
-  msg.className = 'status-msg'; msg.textContent = 'Saving to Google Sheets...'; msg.style.display = 'block';
-  if (state.sheetUrl) {
-    try {
-      const res = await sheetPost({ action: 'addExpense', ...exp });
-      if (res.ok) { msg.className = 'status-msg success'; msg.textContent = '✓ Transaction saved to Google Sheets!'; }
-      else throw new Error();
-    } catch { msg.className = 'status-msg error'; msg.textContent = '✗ Saved locally but sheet sync failed.'; }
-  } else {
-    msg.className = 'status-msg success'; msg.textContent = '✓ Saved locally. Connect Google Sheets in Settings to sync.';
-  }
-  setTimeout(() => { msg.style.display = 'none'; }, 4000);
   clearForm();
+
+  await btnSave(btn, async () => {
+    if (state.sheetUrl) {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
+      await Promise.race([sheetPost({ action: 'addExpense', ...exp }), timeout]);
+    }
+  }, { successLabel: '✓ Saved', resetMs: 1800 });
 }
 
 function clearForm() {
@@ -1743,22 +1792,14 @@ async function saveBudgets() {
   localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
   populateCategorySelect();
   renderDashboard();
-  const msg = document.getElementById('budget-status');
-  msg.style.display = 'block';
-  if (state.sheetUrl) {
-    msg.className = 'status-msg'; msg.textContent = 'Saving...';
-    try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
-      const save = sheetPost({ action: 'saveBudgets', categories: state.categories, groupOrder: state.groupOrder });
-      await Promise.race([save, timeout]);
-      msg.className = 'status-msg success'; msg.textContent = '✓ Budgets saved!';
-    } catch {
-      msg.className = 'status-msg success'; msg.textContent = '✓ Saved locally (sheet sync may still be processing).';
+
+  const btn = document.querySelector('[onclick="saveBudgets()"]');
+  await btnSave(btn, async () => {
+    if (state.sheetUrl) {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
+      await Promise.race([sheetPost({ action: 'saveBudgets', categories: state.categories, groupOrder: state.groupOrder }), timeout]);
     }
-  } else {
-    msg.className = 'status-msg success'; msg.textContent = '✓ Budgets saved locally.';
-  }
-  setTimeout(() => { msg.style.display = 'none'; }, 3500);
+  });
 }
 
 // ─── Rules ───────────────────────────────────────────────────────────
@@ -1844,20 +1885,14 @@ function addRuleRow() {
 
 async function saveRules() {
   localStorage.setItem('budget_rules', JSON.stringify(state.rules));
-  const msg = document.getElementById('rules-status');
-  msg.style.display = 'block';
-  if (state.sheetUrl) {
-    msg.className = 'status-msg'; msg.textContent = 'Saving...';
-    try {
+
+  const btn = document.querySelector('[onclick="saveRules()"]');
+  await btnSave(btn, async () => {
+    if (state.sheetUrl) {
       const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
       await Promise.race([sheetPost({ action: 'saveRules', rules: state.rules }), timeout]);
-      msg.className = 'status-msg success'; msg.textContent = `✓ ${state.rules.length} rule${state.rules.length!==1?'s':''} saved to Google Sheets!`;
-    } catch {
-      msg.className = 'status-msg success'; msg.textContent = `✓ ${state.rules.length} rule${state.rules.length!==1?'s':''} saved locally.`;
     }
-  } else {
-    msg.className = 'status-msg success'; msg.textContent = `✓ ${state.rules.length} rule${state.rules.length!==1?'s':''} saved locally.`;
-  }
+  });
 
   // After saving, check if any existing transactions are uncategorized and a
   // categorize-type rule could now match them. If so, offer to apply.
@@ -1865,11 +1900,9 @@ async function saveRules() {
   const uncatTransactions = state.expenses.filter(e =>
     !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category)
   );
-  const categorizeRules = state.rules.filter(r => r.action !== 'delete' && r.contains);
   const matchable = uncatTransactions.filter(e => applyRules(e.description) && applyRules(e.description) !== '__delete__');
 
   if (matchable.length > 0) {
-    // Small delay so the save message shows first
     setTimeout(() => {
       const applyEl = document.getElementById('rules-apply-prompt');
       if (applyEl) {
@@ -1884,8 +1917,6 @@ async function saveRules() {
       }
     }, 400);
   }
-
-  setTimeout(() => { msg.style.display = 'none'; }, 3500);
 }
 
 // Applies all categorize-type rules to currently uncategorized transactions,
@@ -1907,19 +1938,15 @@ async function applyRulesToUncategorized() {
   renderExpenseTable();
   renderDashboard();
 
-  // Sync to Sheets
-  if (state.sheetUrl) {
-    try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 15000));
-      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-    } catch { /* silent */ }
-  }
-
-  const promptEl = document.getElementById('rules-apply-prompt');
-  if (promptEl) {
-    const deletedNote = deleted > 0 ? `, ${deleted} deleted` : '';
-    promptEl.innerHTML = `<div class="status-msg success" style="display:block; margin-top:10px;">✓ Updated ${changed} transaction${changed!==1?'s':''}${deletedNote}.</div>`;
-    setTimeout(() => { promptEl.style.display = 'none'; }, 4000);
+  const btn = document.querySelector('#rules-apply-prompt .btn-primary');
+  if (btn) {
+    await btnSave(btn, async () => {
+      if (state.sheetUrl) {
+        const timeout = new Promise((_, rej) => setTimeout(() => rej(), 15000));
+        await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
+      }
+    }, { successLabel: `✓ Updated ${changed}${deleted?' (+'+deleted+' deleted)':''}`, resetMs: 3000 });
+    setTimeout(() => { document.getElementById('rules-apply-prompt').style.display = 'none'; }, 3500);
   }
 }
 
@@ -1936,21 +1963,37 @@ function renderFiltersEditor() {
   }
   let html = '';
   state.filters.forEach((f, fi) => {
-    html += `<div class="filter-editor-row">
-      <h4>
-        <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)" placeholder="Filter name (e.g. Michelle)" style="font-size:13px;font-weight:500;border:none;background:none;padding:0;width:200px;outline:none;color:var(--text);">
-        <button class="del-btn" onclick="removeFilter(${fi})">✕ Remove</button>
-      </h4>
-      <div class="filter-cat-grid">
+    const checkedCount = (f.categories||[]).length;
+    const isOpen = f._open || false;
+    html += `<div class="filter-editor-row" id="filter-row-${fi}">
+      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleFilterRow(${fi})">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)"
+            onclick="event.stopPropagation()"
+            placeholder="Filter name (e.g. Michelle)"
+            style="font-size:13px; font-weight:600; border:none; background:none; padding:0; width:160px; outline:none; color:var(--text);">
+          <span style="font-size:12px; color:var(--muted);">${checkedCount} categor${checkedCount!==1?'ies':'y'}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:12px; color:var(--muted);">${isOpen ? '▲ Collapse' : '▼ Edit'}</span>
+          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">✕</button>
+        </div>
+      </div>
+      ${isOpen ? `<div class="filter-cat-grid" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
         ${state.categories.map(c => `
           <label class="filter-cat-check">
             <input type="checkbox" ${(f.categories||[]).includes(c.name)?'checked':''} onchange="toggleFilterCat(${fi},'${escHtml(c.name)}',this.checked)">
             <span>${escHtml(c.name)}</span>
           </label>`).join('')}
-      </div>
+      </div>` : ''}
     </div>`;
   });
   el.innerHTML = html;
+}
+
+function toggleFilterRow(fi) {
+  state.filters[fi]._open = !state.filters[fi]._open;
+  renderFiltersEditor();
 }
 
 function updateFilterName(i, val) { state.filters[i].name = val; }
@@ -1965,28 +2008,21 @@ function toggleFilterCat(fi, catName, checked) {
   else { state.filters[fi].categories = state.filters[fi].categories.filter(c => c !== catName); }
 }
 function addFilterRow() {
-  state.filters.push({ name: '', categories: [] });
+  state.filters.push({ name: '', categories: [], _open: true });
   renderFiltersEditor();
-  setTimeout(() => document.querySelector(`#filters-editor .filter-editor-row:last-child input[type=text]`)?.focus(), 50);
+  setTimeout(() => document.querySelector(`#filter-row-${state.filters.length-1} input[type=text]`)?.focus(), 50);
 }
 async function saveFilters() {
   localStorage.setItem('budget_filters', JSON.stringify(state.filters));
-  const msg = document.getElementById('filters-status');
-  msg.style.display = 'block';
-  if (state.sheetUrl) {
-    msg.className = 'status-msg'; msg.textContent = 'Saving...';
-    try {
+  renderFilterBar();
+
+  const btn = document.querySelector('[onclick="saveFilters()"]');
+  await btnSave(btn, async () => {
+    if (state.sheetUrl) {
       const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
       await Promise.race([sheetPost({ action: 'saveFilters', filters: state.filters }), timeout]);
-      msg.className = 'status-msg success'; msg.textContent = '✓ Filters saved to Google Sheets!';
-    } catch {
-      msg.className = 'status-msg success'; msg.textContent = '✓ Filters saved locally.';
     }
-  } else {
-    msg.className = 'status-msg success'; msg.textContent = '✓ Filters saved locally.';
-  }
-  renderFilterBar();
-  setTimeout(() => { msg.style.display = 'none'; }, 3500);
+  });
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────
