@@ -265,9 +265,9 @@
     /* Show date inside card meta on mobile */
     .expense-table tr.expense-data-row td.exp-card-meta [id^="mobile-date-"] { display: inline !important; }
 
-    /* Search full width on mobile */
-    #search-input { width: 100% !important; }
-    .exp-count-search { flex-direction: column; gap: 6px; }
+    /* Search full width on mobile, stacks below period strip */
+    .exp-count-search { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
+    #search-input { width: 100% !important; max-width: 100% !important; }
   }
 </style>
 </head>
@@ -315,7 +315,7 @@
   <div id="tab-expenses" class="panel">
     <div style="margin-bottom:1.25rem;">
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;" class="exp-count-search">
-        <div class="period-toggle" id="exp-period-toggle">
+        <div class="period-toggle" id="exp-period-toggle" style="flex:1; min-width:0;">
           <label>Period:</label>
           <button class="toggle-btn active" onclick="setExpPeriod('monthly',event)">This month</button>
           <button class="toggle-btn" onclick="setExpPeriod('lastmonth',event)">Last month</button>
@@ -325,7 +325,7 @@
           <button class="toggle-btn" onclick="setExpPeriod('custom',event)">Custom</button>
           <select id="exp-month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setExpCustomMonth(this.value)"></select>
         </div>
-        <input type="text" id="search-input" placeholder="Search..." style="width:180px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
+        <input type="text" id="search-input" placeholder="Search..." style="flex:1; min-width:120px; max-width:220px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
       </div>
       <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
         <button class="filter-chip active" id="exp-filter-all" onclick="setExpFilter(null,event)">All</button>
@@ -1035,7 +1035,8 @@ function renderDashboard() {
   Object.entries(groups).forEach(([grp, cats]) => {
     html += `<div class="group"><div class="group-header">${grp}</div>`;
     cats.forEach(c => {
-      const pct = c.budget > 0 ? Math.min((c.spent / c.budget) * 100, 100) : 0;
+      const pct = c.budget > 0 ? (c.spent / c.budget) * 100 : 0;
+      const barPct = Math.min(pct, 100);
       const cls = pct >= 100 ? 'over' : pct >= 85 ? 'warn' : 'ok';
       const remain = c.budget - c.spent;
 
@@ -1054,8 +1055,8 @@ function renderDashboard() {
       html += `<div class="cat-row">
         <div class="cat-name">${c.name}<div class="sub">${c.period}</div>${ytdHtml}</div>
         <div class="progress-wrap">
-          <div class="progress-bar"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
-          <div class="progress-pct">${Math.round(pct)}%</div>
+          <div class="progress-bar"><div class="progress-fill ${cls}" style="width:${barPct}%"></div></div>
+          <div class="progress-pct" style="${pct > 100 ? 'color:var(--danger);font-weight:700;' : ''}">${Math.round(pct)}%</div>
         </div>
         <div class="cat-budget">$${fmt(c.budget)}</div>
         <div class="cat-spent">$${fmt(c.spent)}</div>
