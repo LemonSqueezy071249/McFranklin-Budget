@@ -555,21 +555,12 @@ const APPS_SCRIPT = `function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  if (data.action === 'addExpense') {
-    var sheet = ss.getSheetByName('Expenses') || ss.insertSheet('Expenses');
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow(['Date','Amount','Category','Description','Memo','Who','Added']);
-    }
-    sheet.appendRow([data.date, data.amount, data.category, data.description, data.memo||'', data.who, new Date().toISOString()]);
-    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
-  }
-
   if (data.action === 'replaceExpenses') {
     var sheet = ss.getSheetByName('Expenses') || ss.insertSheet('Expenses');
     sheet.clearContents();
-    sheet.appendRow(['Date','Amount','Category','Description','Memo','Who','Added']);
+    sheet.appendRow(['Date','Amount','Category','Description','Memo','Who']);
     (data.expenses||[]).forEach(function(e){
-      sheet.appendRow([e.date, e.amount, e.category, e.description||'', e.memo||'', e.who||'', e.added||'']);
+      sheet.appendRow([e.date, e.amount, e.category, e.description||'', e.memo||'', e.who||'']);
     });
     return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
   }
@@ -614,7 +605,6 @@ function doGet(e) {
     var rows = es.getRange(2, 1, es.getLastRow()-1, 6).getValues();
     result.expenses = rows.map(function(r){ return {date:r[0],amount:r[1],category:r[2],description:r[3],memo:r[4],who:r[5]}; });
   }
-
   var bs = ss.getSheetByName('Budgets');
   if (bs && bs.getLastRow() > 1) {
     var brows = bs.getRange(2, 1, bs.getLastRow()-1, 4).getValues();
@@ -1466,7 +1456,7 @@ async function addExpense() {
   await btnSave(btn, async () => {
     if (state.sheetUrl) {
       const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'addExpense', ...exp }), timeout]);
+      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
     }
   }, { successLabel: '✓ Saved', resetMs: 1800 });
 }
