@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>McFranklin Budget 1.22</title>
+<!-- Firebase SDKs (compat version - no bundler needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F2F2F7;
+    --surface: #FFFFFF;
+    --surface-2: #F9F9FB;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.13);
+    --text: #1C1C1E;
+    --text-2: #3C3C43;
+    --muted: #8E8E93;
+    --accent: #5856D6;
+    --accent-light: #EFEEFC;
+    --accent-mid: #7B7AE0;
+    --accent-hover: #4240C4;
+    --green: #34C759;
+    --green-light: #E9F8ED;
+    --green-dark: #248A3D;
+    --danger: #FF3B30;
+    --danger-light: #FFF0EF;
+    --warn: #FF9500;
+    --warn-light: #FFF4E5;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-lg: 16px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .app { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  header { margin-bottom: 1.75rem; padding: 1.25rem 1.5rem; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.03em; background: linear-gradient(135deg, var(--accent) 0%, #9B59D0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  header p { color: var(--muted); font-size: 13px; margin-top: 1px; font-weight: 400; }
+  #config-banner { background: linear-gradient(135deg,#FFF8E6,#FFFBF0); border: 1px solid rgba(255,180,0,0.3); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: 13.5px; box-shadow: var(--shadow-sm); }
+  #config-banner strong { color: #7A5500; }
+  #config-banner p { color: #5C4200; margin-top: 4px; line-height: 1.6; }
+  #config-banner code { background: rgba(255,180,0,0.2); padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+  .tabs { display: flex; gap: 2px; margin-bottom: 1.75rem; background: var(--surface); border-radius: var(--radius); padding: 4px; box-shadow: var(--shadow-sm); overflow-x: auto; }
+  .tab { padding: 7px 16px; font-size: 13.5px; font-weight: 500; color: var(--muted); background: none; border: none; cursor: pointer; border-radius: var(--radius-sm); transition: all 0.18s; font-family: var(--sans); white-space: nowrap; }
+  .tab:hover { color: var(--text); background: var(--bg); }
+  .tab.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 1.75rem; }
+  .summary-card { background: var(--surface); border-radius: var(--radius); padding: 1.1rem 1.25rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, transform 0.2s; }
+  .summary-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+  .summary-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+  .summary-card .value { font-size: 1.75rem; font-weight: 700; color: var(--text); letter-spacing: -0.03em; }
+  .summary-card .value.green { color: var(--green-dark); }
+  .summary-card .value.red { color: var(--danger); }
+  .period-toggle { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+  .period-toggle label { font-size: 12px; color: var(--muted); margin-right: 2px; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+  .toggle-btn { padding: 5px 13px; font-size: 13px; border-radius: 20px; border: 1.5px solid var(--border-strong); background: var(--surface); cursor: pointer; color: var(--text-2); font-family: var(--sans); font-weight: 500; transition: all 0.15s; box-shadow: var(--shadow-sm); }
+  .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .toggle-btn.active { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 2px 8px rgba(88,86,214,0.35); }
+  .group { margin-bottom: 1.75rem; }
+  .group-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); padding: 0 8px 8px; border-bottom: 1.5px solid var(--border); margin-bottom: 4px; font-weight: 700; }
+  .cat-row { display: grid; grid-template-columns: 220px 1fr 90px 90px 90px; align-items: center; gap: 12px; padding: 9px 8px; border-radius: var(--radius-sm); transition: background 0.12s; }
+  .cat-row:hover { background: var(--surface); }
+  .cat-name { font-size: 14px; font-weight: 500; }
+  .cat-name .sub { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+  .progress-bar { height: 5px; background: var(--bg); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s cubic-bezier(.4,0,.2,1); }
+  .progress-fill.ok   { background: linear-gradient(90deg,#34C759,#30D158); }
+  .progress-fill.warn { background: linear-gradient(90deg,#FF9500,#FFB340); }
+  .progress-fill.over { background: linear-gradient(90deg,#FF3B30,#FF6961); }
+  .cat-budget { font-size: 13px; color: var(--muted); text-align: right; }
+  .cat-spent  { font-size: 13px; font-weight: 600; text-align: right; }
+  .cat-remain { font-size: 13px; text-align: right; font-weight: 500; }
+  .cat-remain.pos { color: var(--green-dark); }
+  .cat-remain.neg { color: var(--danger); }
+  .progress-wrap { display: flex; flex-direction: column; gap: 3px; }
+  .progress-pct { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .cat-ytd { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .cat-ytd .ytd-ok { color: var(--green-dark); }
+  .cat-ytd .ytd-over { color: var(--danger); }
+  .form-card { background: var(--surface); border-radius: var(--radius-lg); padding: 1.5rem 1.75rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); }
+  .form-card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem; letter-spacing: -0.02em; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label.field-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  input, select, textarea { font-family: var(--sans); font-size: 14px; padding: 9px 12px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); width: 100%; transition: border-color 0.15s, box-shadow 0.15s; font-weight: 400; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px rgba(88,86,214,0.12); }
+  .btn { font-family: var(--sans); font-size: 14px; padding: 9px 20px; border-radius: var(--radius-sm); border: none; cursor: pointer; transition: all 0.18s; font-weight: 600; letter-spacing: -0.01em; }
+  .btn-primary { background: var(--accent); color: white; box-shadow: 0 2px 8px rgba(88,86,214,0.3); }
+  .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(88,86,214,0.4); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
+  .btn-secondary { background: var(--surface); border: 1.5px solid var(--border-strong); color: var(--text-2); }
+  .btn-secondary:hover { background: var(--bg); border-color: var(--accent); color: var(--accent); }
+  .import-area { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 2.5rem 2rem; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface-2); }
+  .import-area:hover, .import-area.dragover { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 4px rgba(88,86,214,0.08); }
+  .import-area p { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .import-area .icon { font-size: 2.2rem; }
+  .expense-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .expense-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 700; padding: 8px 10px; border-bottom: 1.5px solid var(--border); }
+  .expense-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .expense-table td.date-col { white-space: nowrap; width: 90px; font-size: 12.5px; color: var(--muted); }
+  .expense-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .expense-table th.sortable:hover { color: var(--accent); }
+  .expense-table th.sortable.sort-active { color: var(--accent); }
+  .sort-icon { display: inline-block; margin-left: 4px; opacity: 0.4; font-size: 10px; }
+  .sort-active .sort-icon { opacity: 1; }
+  .expense-table tr:last-child td { border-bottom: none; }
+  .expense-table tbody tr:hover td { background: var(--surface-2); }
+  .badge { display: inline-block; font-size: 11.5px; padding: 2px 9px; border-radius: 20px; background: var(--accent-light); color: var(--accent); font-weight: 600; }
+  .del-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 7px; border-radius: var(--radius-sm); transition: all 0.15s; line-height: 1; }
+  .del-btn:hover { color: var(--danger); background: var(--danger-light); }
+  .pencil-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 7px; border-radius: var(--radius-sm); transition: all 0.15s; line-height: 1; }
+  .pencil-btn:hover { color: var(--accent); background: var(--accent-light); }
+  .conn-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; font-weight: 500; }
+  .conn-status.connected { background: var(--green-light); color: var(--green-dark); }
+  .conn-status.disconnected { background: var(--warn-light); color: var(--warn); }
+  .conn-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .settings-section { background: var(--surface); border-radius: var(--radius-lg); padding: 1.5rem 1.75rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); }
+  .settings-section h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+  .filter-chip { padding: 5px 14px; font-size: 13px; border-radius: 20px; border: 1.5px solid var(--border-strong); background: var(--surface); cursor: pointer; color: var(--text-2); font-family: var(--sans); font-weight: 500; transition: all 0.15s; box-shadow: var(--shadow-sm); }
+  .filter-chip.active { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 2px 8px rgba(88,86,214,0.3); }
+  .filter-chip:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+  .status-msg { font-size: 13px; padding: 9px 14px; border-radius: var(--radius-sm); margin-top: 10px; display: none; font-weight: 500; }
+  .status-msg.success { background: var(--green-light); color: var(--green-dark); display: block; }
+  .status-msg.error { background: var(--danger-light); color: var(--danger); display: block; }
+
+  /* Button save states */
+  .btn-saving { background: var(--muted) !important; box-shadow: none !important; transform: none !important; cursor: default !important; }
+  .btn-saved  { background: var(--green-dark) !important; box-shadow: 0 2px 8px rgba(36,138,61,0.3) !important; cursor: default !important; }
+  .btn-error  { background: var(--danger) !important; box-shadow: 0 2px 8px rgba(255,59,48,0.3) !important; }
+  @keyframes btn-spin { to { transform: rotate(360deg); } }
+  .btn-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: btn-spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
+  .empty-state { text-align: center; padding: 3.5rem 1rem; color: var(--muted); }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .flex { display: flex; } .items-center { align-items: center; } .justify-between { justify-content: space-between; } .gap-2 { gap: 8px; } .mt-1 { margin-top: 6px; } .mb-1 { margin-bottom: 8px; } .text-sm { font-size: 13px; } .text-muted { color: var(--muted); } .ytd-note { font-size: 12px; color: var(--muted); font-style: italic; margin-left: 4px; }
+  .csv-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; font-size: 13px; }
+  .csv-map-grid .csv-map-full { grid-column: 1 / -1; }
+  @media (max-width: 520px) { .csv-map-grid { grid-template-columns: 1fr; } .csv-map-grid .csv-map-full { grid-column: 1; } }
+  .filter-editor-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; }
+  .filter-editor-row h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .filter-cat-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filter-cat-check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+  .filter-cat-check input { cursor: pointer; width: 14px; height: 14px; accent-color: var(--accent); }
+  .split-row-container { background: var(--accent-light); border-top: 1px solid rgba(88,86,214,0.15); }
+  .split-row-container td { padding: 14px 18px !important; }
+  .split-editor { display: flex; flex-direction: column; gap: 8px; }
+  .split-header { font-size: 11.5px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+  .split-line { display: grid; grid-template-columns: 1fr 130px 36px; gap: 8px; align-items: center; }
+  .split-line input, .split-line select { padding: 6px 9px; font-size: 13px; }
+  .split-total-row { display: flex; align-items: center; gap: 12px; padding-top: 6px; font-size: 13px; }
+  .split-remaining { font-weight: 600; }
+  .split-remaining.ok { color: var(--green-dark); } .split-remaining.over { color: var(--danger); } .split-remaining.uneven { color: var(--warn); }
+  .split-btn { font-size: 12px; padding: 6px 13px; border-radius: var(--radius-sm); border: none; cursor: pointer; font-family: var(--sans); font-weight: 600; transition: all .15s; }
+  .split-btn-confirm { background: var(--accent); color: white; box-shadow: 0 2px 6px rgba(88,86,214,0.3); }
+  .split-btn-confirm:hover { background: var(--accent-hover); }
+  .split-btn-confirm:disabled { opacity: .4; cursor: default; box-shadow: none; }
+  .split-btn-cancel { background: var(--surface); border: 1.5px solid var(--border-strong) !important; color: var(--text-2); }
+  .split-btn-cancel:hover { border-color: var(--danger) !important; color: var(--danger); }
+  .split-btn-add { background: none; color: var(--accent); border: 1.5px dashed var(--accent-mid) !important; }
+  .split-btn-add:hover { background: var(--surface); }
+  .edit-row-container { background: var(--surface-2); border-top: 1px solid var(--border); }
+  .edit-row-container td { padding: 14px 18px !important; }
+  .edit-form { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+  .edit-form input, .edit-form select { padding: 6px 9px; font-size: 13px; }
+  .edit-form .full { grid-column: 1 / -1; }
+  .edit-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .rule-row { display: grid; grid-template-columns: 24px 1fr 170px 1fr 36px; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .rule-drag-handle { color: var(--border-strong); font-size: 14px; cursor: grab; text-align: center; transition: color 0.15s; }
+  .rule-row:hover .rule-drag-handle { color: var(--muted); }
+  .rule-row.dragging { opacity: 0.35; }
+  .rule-row.drag-over-rule { border-top: 2px solid var(--accent); }
+  @media (max-width: 640px) { .rule-row { grid-template-columns: 24px 1fr 150px 36px; } .rule-row .rule-cat-col { display: none; } }
+  .budget-group-block { background: var(--surface); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; box-shadow: var(--shadow-sm); }
+  .budget-group-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  .budget-group-header .drag-handle { color: var(--muted); font-size: 16px; cursor: grab; flex-shrink: 0; line-height: 1; }
+  .budget-group-name-input { font-size: 14px; font-weight: 600; border: none; background: none; color: var(--text); padding: 2px 4px; flex: 1; font-family: var(--sans); border-radius: 4px; }
+  .budget-group-name-input:focus { outline: none; background: var(--surface); border: 1.5px solid var(--accent); box-shadow: 0 0 0 3px rgba(88,86,214,0.1); }
+  .budget-group-body { padding: 4px 0; }
+  .budget-item-row { display: grid; grid-template-columns: 28px 1fr 120px 120px 36px; align-items: center; gap: 8px; padding: 5px 10px; transition: background 0.1s; }
+  .budget-item-row:hover { background: var(--surface-2); }
+  .budget-item-row.dragging { opacity: 0.35; background: var(--accent-light); }
+  .budget-item-row.drag-over-item { border-top: 2px solid var(--accent); }
+  .budget-group-block.drag-over-group { border: 2px solid var(--accent-mid); background: var(--accent-light); }
+  .budget-group-block.dragging-group { opacity: 0.4; }
+  .item-drag-handle { color: var(--border-strong); font-size: 14px; cursor: grab; text-align: center; transition: color 0.15s; }
+  .budget-item-row:hover .item-drag-handle { color: var(--muted); }
+  .budget-item-row input { padding: 5px 8px; font-size: 13px; }
+  .budget-item-row select { padding: 5px 8px; font-size: 13px; }
+  .group-add-btn { font-size: 12.5px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 8px 14px 10px; font-family: var(--sans); font-weight: 600; display: block; }
+  .group-add-btn:hover { text-decoration: underline; }
+  .group-del-btn { font-size: 12px; color: var(--muted); background: none; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; padding: 3px 9px; font-family: var(--sans); font-weight: 500; flex-shrink: 0; white-space: nowrap; }
+  .group-del-btn:hover { color: var(--danger); border-color: var(--danger); }
+  .add-group-btn { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 13px; text-align: center; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); background: none; width: 100%; font-family: var(--sans); transition: all 0.15s; margin-bottom: 1rem; }
+  .add-group-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .budget-edit-row { display: grid; grid-template-columns: 1fr 130px 130px 40px; gap: 10px; align-items: center; margin-bottom: 8px; }
+  /* ── Mobile ── */
+  @media (max-width: 640px) {
+    .app { padding: 1rem 1rem 5rem; }
+    header { padding: 0.9rem 1.1rem; flex-wrap: wrap; gap: 6px; }
+    header h1 { font-size: 1.15rem; }
+    .conn-status { font-size: 11px; padding: 4px 9px; }
+
+    /* Tabs — scrollable pill strip */
+    .tabs { padding: 3px; gap: 1px; }
+    .tab { padding: 6px 11px; font-size: 12px; }
+
+    /* Summary cards — 2-up */
+    .summary-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .summary-card { padding: 0.85rem 1rem; }
+    .summary-card .value { font-size: 1.35rem; }
+    .summary-card .label { font-size: 10px; }
+
+    /* Period toggle — horizontal scroll, no wrap */
+    .period-toggle { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; gap: 4px; scrollbar-width: none; }
+    .period-toggle::-webkit-scrollbar { display: none; }
+    .period-toggle label { display: none; }
+    .toggle-btn { padding: 5px 11px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+
+    /* Dashboard category rows — simplified 3-col */
+    .cat-row { grid-template-columns: 1fr 70px 70px; gap: 8px; padding: 8px 4px; }
+    .cat-row .cat-budget { display: none; }
+    .cat-name { font-size: 13px; }
+    .cat-name .sub { display: none; }
+    .group-header { font-size: 10px; }
+
+    /* Filter chips — scrollable row */
+    #filter-bar, [style*="exp-filter"] { flex-wrap: nowrap !important; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+
+    /* Forms */
+    .form-grid { grid-template-columns: 1fr; }
+    .form-card { padding: 1.1rem 1.1rem; }
+    .form-card h2 { font-size: 1rem; margin-bottom: 1rem; }
+
+    /* Budget editor */
+    .budget-item-row { grid-template-columns: 24px 1fr 90px 36px; }
+    .budget-item-row .period-sel { display: none; }
+    .budget-group-header { padding: 8px 10px; }
+    .settings-section { padding: 1.1rem 1.1rem; }
+    .settings-section h2 { font-size: 1rem; }
+
+    /* Rules */
+    .rule-row { grid-template-columns: 24px 1fr 130px 36px; }
+    .rule-row .rule-cat-col { display: none; }
+
+    /* Transaction table → card list on mobile */
+    .expense-table thead { display: none; }
+    .expense-table, .expense-table tbody { display: block; }
+    .expense-table tr.expense-data-row { display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius); margin-bottom: 8px; box-shadow: var(--shadow-sm); padding: 0; overflow: hidden; border-bottom: none !important; }
+    .expense-table tr.expense-data-row td { border-bottom: none !important; padding: 0; display: block; }
+    .expense-table tr.expense-data-row td.exp-card-main { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 12px 6px; gap: 8px; }
+    .expense-table tr.expense-data-row td.exp-card-meta { display: flex; align-items: center; gap: 8px; padding: 0 12px 10px; flex-wrap: wrap; }
+    .expense-table tr.expense-data-row td.exp-card-actions { display: flex; justify-content: flex-end; gap: 4px; padding: 0 8px 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+    /* Hide unused td cells in card mode */
+    .expense-table tr.expense-data-row td.exp-hide-mobile { display: none; }
+    /* Edit and split rows stay as full-width blocks */
+    .expense-table tr.edit-expand-row td,
+    .expense-table tr.split-expand-row td { display: block; }
+    /* Show date inside card meta on mobile */
+    .expense-table tr.expense-data-row td.exp-card-meta [id^="mobile-date-"] { display: inline !important; }
+
+    /* Search full width on mobile, stacks below period strip */
+    .exp-count-search { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
+    #search-input { width: 100% !important; max-width: 100% !important; }
+  }
+  /* ── Sign-in screen ── */
+  #signin-screen { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; z-index:1000; }
+  #signin-screen h1 { font-size:1.6rem; font-weight:700; letter-spacing:-0.03em; background:linear-gradient(135deg,var(--accent) 0%,#9B59D0 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  #signin-screen p { color:var(--muted); font-size:14px; max-width:280px; text-align:center; line-height:1.6; }
+  .signin-btn { display:flex; align-items:center; gap:10px; background:white; border:1.5px solid var(--border-strong); border-radius:var(--radius); padding:12px 20px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:var(--shadow); transition:all .2s; font-family:var(--sans); color:var(--text); }
+  .signin-btn:hover { box-shadow:var(--shadow-lg); transform:translateY(-1px); }
+  .signin-btn img { width:20px; height:20px; }
+  #app-root { display:none; }
+</style>
+</head>
+<body>
+<!-- Sign-in screen (shown before auth) -->
+<div id="signin-screen">
+  <div style="font-size:2.5rem;">💰</div>
+  <h1>McFranklin Budget</h1>
+  <p>Sign in with your Google account to access the family budget.</p>
+  <button class="signin-btn" onclick="signInWithGoogle()">
+    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+    Sign in with Google
+  </button>
+  <p style="font-size:12px; color:var(--muted);">Only jehffranklen@gmail.com and mlmcginty93@gmail.com have access.</p>
+</div>
+
+<div id="app-root">
+<div class="app">
+  <header>
+    <div>
+      <h1>McFranklin Budget</h1>
+      <p id="period-label">Loading...</p>
+    </div>
+    <span id="conn-indicator" class="conn-status disconnected"><span class="dot"></span> Not connected</span>
+  </header>
+
+  <div id="config-banner">
+    <strong>⚙️ Connecting to Firebase…</strong>
+    <p>Signing in and loading your data. If this persists, check your internet connection.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab" onclick="switchTab('expenses')">Transactions</button>
+    <button class="tab" onclick="switchTab('add')">Add Transaction</button>
+    <button class="tab" onclick="switchTab('budget')">Budget</button>
+    <button class="tab" onclick="switchTab('rules')">Rules</button>
+    <button class="tab" onclick="switchTab('settings')">Settings</button>
+  </div>
+
+  <div id="tab-dashboard" class="panel active">
+    <div class="summary-grid" id="summary-cards"></div>
+    <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:1.5rem; align-items:flex-start;">
+      <div class="period-toggle">
+        <label>View:</label>
+        <button class="toggle-btn active" onclick="setPeriod('monthly')">This month</button>
+        <button class="toggle-btn" onclick="setPeriod('lastmonth')">Last month</button>
+        <button class="toggle-btn" onclick="setPeriod('ytd')">Year to date</button>
+        <button class="toggle-btn" onclick="setPeriod('yearly')">Full year</button>
+        <button class="toggle-btn" onclick="setPeriod('custom')" id="custom-btn">Custom</button>
+        <select id="month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setCustomMonth(this.value)"></select>
+      </div>
+      <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
+    </div>
+    <div id="categories-view"></div>
+  </div>
+
+  <div id="tab-expenses" class="panel">
+    <div style="margin-bottom:1.25rem;">
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;" class="exp-count-search">
+        <div class="period-toggle" id="exp-period-toggle" style="flex:1; min-width:0;">
+          <label>Period:</label>
+          <button class="toggle-btn active" onclick="setExpPeriod('monthly',event)">This month</button>
+          <button class="toggle-btn" onclick="setExpPeriod('lastmonth',event)">Last month</button>
+          <button class="toggle-btn" onclick="setExpPeriod('ytd',event)">Year to date</button>
+          <button class="toggle-btn" onclick="setExpPeriod('yearly',event)">Full year</button>
+          <button class="toggle-btn" onclick="setExpPeriod('all',event)">All</button>
+          <button class="toggle-btn" onclick="setExpPeriod('custom',event)">Custom</button>
+          <select id="exp-month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setExpCustomMonth(this.value)"></select>
+        </div>
+        <input type="text" id="search-input" placeholder="Search..." style="flex:1; min-width:120px; max-width:220px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+        <button class="filter-chip active" id="exp-filter-all" onclick="setExpFilter(null,event)">All</button>
+        <button class="filter-chip" id="exp-filter-uncategorized" onclick="setExpFilter('__uncategorized__',event)" style="border-color:#E09A2A; color:#B7610A;">⚑ Uncategorized</button>
+        <span id="exp-filter-chips"></span>
+      </div>
+    </div>
+    <div id="exp-count" style="font-size:13px; color:var(--muted); margin-bottom:8px;"></div>
+    <div id="expense-table-wrap"></div>
+  </div>
+
+  <div id="tab-add" class="panel">
+    <div class="form-card">
+      <h2>Add Transaction</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="field-label">Date</label>
+          <input type="date" id="exp-date">
+        </div>
+        <div class="form-group">
+          <label class="field-label">Amount ($)</label>
+          <input type="number" id="exp-amount" placeholder="0.00" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="field-label">Category</label>
+          <select id="exp-cat"></select>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Who paid?</label>
+          <select id="exp-who">
+            <option>Jeff</option>
+            <option>Michelle</option>
+            <option>Joint</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="field-label">Description</label>
+          <input type="text" id="exp-desc" placeholder="e.g. Kroger grocery run">
+        </div>
+        <div class="form-group full">
+          <label class="field-label">Memo <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted); font-size:11px;">— optional, e.g. who a gift was for or what a home purchase was</span></label>
+          <input type="text" id="exp-memo" placeholder="e.g. Birthday gift for Mom">
+        </div>
+      </div>
+      <div style="margin-top:1rem; display:flex; gap:8px;">
+        <button class="btn btn-primary" onclick="addExpense()">Save Expense</button>
+        <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h2>Import Transactions from CSV</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1rem;">Export transactions from your bank as CSV, then upload here. Rules will auto-categorize what they can — the rest goes to Uncategorized for you to sort.</p>
+      <div class="import-area" id="drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div class="icon">📂</div>
+        <p>Click to choose a CSV file, or drag and drop</p>
+        <p style="font-size:12px; margin-top:4px;">Supports most bank export formats</p>
+      </div>
+      <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSVFile(event)">
+      <div id="csv-preview" style="margin-top:1.5rem; display:none;">
+        <h3 style="font-size:14px; font-weight:500; margin-bottom:0.75rem;">Map columns</h3>
+        <div id="csv-map-grid" class="csv-map-grid"></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <span style="font-size:13px; font-weight:500;" id="csv-row-count"></span>
+          <span style="font-size:12px; color:var(--muted);">Scroll to see all rows</span>
+        </div>
+        <div id="csv-preview-table" style="overflow-x:auto; max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius);"></div>
+        <div style="margin-top:1rem; display:flex; gap:8px; align-items:center;">
+          <button id="import-btn" class="btn btn-primary" onclick="importCSV()">Import Rows</button>
+          <button id="cancel-btn" class="btn btn-secondary" onclick="cancelCSV()">Cancel</button>
+          <span id="csv-progress" style="font-size:13px; color:var(--muted); display:none;">Importing…</span>
+        </div>
+        <div id="csv-status" class="status-msg"></div>
+      </div>
+      <div id="csv-success" style="display:none; margin-top:1rem;"></div>
+    </div>
+  </div>
+
+  <div id="tab-rules" class="panel">
+    <div class="settings-section">
+      <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400; margin-bottom:0.25rem;">Import Rules</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">During CSV import, each transaction description is checked against these rules top-to-bottom — first match wins. Rules can assign a category or delete the transaction entirely (useful for autopay or payment rows you never want to see).</p>
+
+      <div class="rule-row" style="margin-bottom:8px;">
+        <div></div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">If description contains…</div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">Action</div>
+        <div class="rule-cat-col" style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:500;">Category</div>
+        <div></div>
+      </div>
+      <div id="rules-editor"></div>
+      <button class="btn btn-secondary" style="font-size:13px; margin-top:10px;" onclick="addRuleRow()">+ Add rule</button>
+      <div style="margin-top:1rem;">
+        <button class="btn btn-primary" onclick="saveRules()">Save rules</button>
+        <div id="rules-apply-prompt" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-settings" class="panel">
+    <div class="settings-section">
+      <h2>Dashboard Filters</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1rem;">Create named filters that show only specific categories on the dashboard. The "All" filter is always available automatically.</p>
+      <div id="filters-editor"></div>
+      <button class="btn btn-secondary" style="font-size:13px; margin-top:10px;" onclick="addFilterRow()">+ Add filter</button>
+      <div style="margin-top:1rem;">
+        <button class="btn btn-primary" onclick="saveFilters()">Save filters</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h2>Account</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div>
+          <div style="font-size:14px; font-weight:600;" id="settings-user-name">—</div>
+          <div style="font-size:13px; color:var(--muted);" id="settings-user-email">Not signed in</div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:13px;" onclick="signOut()">Sign out</button>
+      </div>
+      <div style="margin-top:1rem; padding:10px 14px; background:var(--accent-light); border-radius:var(--radius-sm); font-size:13px; color:var(--accent);">
+        ✓ Data syncs to Firestore in real time. Both Jeff and Michelle share the same budget automatically.
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-budget" class="panel">
+    <div class="settings-section">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">
+        <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400;">Budget Categories</h2>
+        <span style="font-size:12px; color:var(--muted);">Drag ⠿ to reorder groups or items</span>
+      </div>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Set budgets, organize into groups, and drag to reorder. Changes sync to Firestore.</p>
+      <div style="display:grid; grid-template-columns:28px 1fr 120px 120px 36px; gap:8px; padding:0 10px; margin-bottom:4px;">
+        <div></div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;">Category name</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;">Budget</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;">Period</div>
+        <div></div>
+      </div>
+      <div id="budget-editor"></div>
+      <button class="add-group-btn" onclick="addGroupBlock()">+ Add new group</button>
+      <button class="btn btn-primary" onclick="saveBudgets()">Save budgets</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- State -----------------------------------------------------------
+// DEFAULT_CATEGORIES is the fallback used only on first load if no data
+// exists in localStorage or Google Sheets yet.
+const DEFAULT_CATEGORIES = [
+  { group: "Giving", name: "Tithe (on Net)", budget: 0, period: "monthly" },
+  { group: "Giving", name: "Isaac Missionary Support", budget: 0, period: "monthly" },
+  { group: "Giving", name: "Deeper", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Rent / House Payment / Property Taxes / Insurance", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Water", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Gas", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Electric", budget: 0, period: "monthly" },
+  { group: "Housing", name: "Internet", budget: 0, period: "monthly" },
+  { group: "Housing", name: "HOA Dues", budget: 0, period: "monthly" },
+  { group: "Transportation", name: "Car Insurance", budget: 0, period: "monthly" },
+  { group: "Transportation", name: "Car Registration", budget: 0, period: "yearly" },
+  { group: "Transportation", name: "Van Payment", budget: 0, period: "monthly" },
+  { group: "Transportation", name: "Gas / Tolls", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Health Insurance", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Dental Insurance", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Vision Insurance", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Jeff Term Life", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Michelle Term Life", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Accidental Death & Dismemberment", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Long Term Disability", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Short Term Disability", budget: 0, period: "monthly" },
+  { group: "Insurance", name: "Jewelry Insurance", budget: 0, period: "monthly" },
+  { group: "Professional", name: "ACBC Certification", budget: 0, period: "yearly" },
+  { group: "Professional", name: "CST Certification & Credits", budget: 0, period: "yearly" },
+  { group: "Professional", name: "Cellphone", budget: 0, period: "monthly" },
+  { group: "Living", name: "Groceries", budget: 0, period: "monthly" },
+  { group: "Living", name: "Dates / Eating Out / Entertainment", budget: 0, period: "monthly" },
+  { group: "Living", name: "Clothing", budget: 0, period: "monthly" },
+  { group: "Living", name: "Eyeglasses", budget: 0, period: "yearly" },
+  { group: "Living", name: "Gifts", budget: 0, period: "monthly" },
+  { group: "Living", name: "Vacation", budget: 0, period: "yearly" },
+  { group: "Living", name: "Medical", budget: 0, period: "monthly" },
+  { group: "Living", name: "Personal Discretionary", budget: 0, period: "monthly" },
+  { group: "Living", name: "Swim Lessons", budget: 0, period: "monthly" },
+  { group: "Living", name: "Mommy's Helper", budget: 0, period: "monthly" },
+  { group: "Savings", name: "Car Fund / Car", budget: 0, period: "monthly" },
+  { group: "Savings", name: "Home Fund", budget: 0, period: "monthly" },
+  { group: "Savings", name: "401k", budget: 0, period: "monthly" },
+];
+
+// Central app state. Persisted to localStorage as a cache;
+// Firestore is the source of truth when signed in.
+let state = {
+  categories: JSON.parse(localStorage.getItem('budget_cats') || 'null') || DEFAULT_CATEGORIES,
+  expenses: JSON.parse(localStorage.getItem('budget_expenses') || '[]'),
+  rules: JSON.parse(localStorage.getItem('budget_rules') || '[]'),
+  filters: JSON.parse(localStorage.getItem('budget_filters') || '[]'),
+  groupOrder: JSON.parse(localStorage.getItem('budget_group_order') || 'null'),
+  // Firestore is the backend - no URL needed
+  viewPeriod: 'monthly',
+  viewMonth: new Date().getMonth(),
+  viewYear: new Date().getFullYear(),
+  activeFilter: null,
+  expPeriod: 'monthly',
+  expMonth: new Date().getMonth(),
+  expYear: new Date().getFullYear(),
+  expFilter: null,
+  sortCol: 'date',
+  sortDir: 'desc',
+  csvRows: [],
+  csvHeaders: [],
+  connected: false
+};
+
+// --- Firebase + Firestore Backend ---
+// Replaces the Google Sheets backend entirely.
+// Two authorized users share a single budget document path in Firestore:
+//   /budgets/mcfranklin/{expenses, categories, groupOrder, rules, filters}
+// Auth is Google Sign-In - only the two registered emails can access data.
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDoFkm3Cll0WhmJppXEOfIvo5ucIafsDks",
+  authDomain: "mcfranklin-budget-app.firebaseapp.com",
+  projectId: "mcfranklin-budget-app",
+  storageBucket: "mcfranklin-budget-app.firebasestorage.app",
+  messagingSenderId: "1091989334005",
+  appId: "1:1091989334005:web:cda64638f3c2b612aea2bc"
+};
+
+const ALLOWED_EMAILS = ['jehffranklen@gmail.com', 'mlmcginty93@gmail.com'];
+const BUDGET_DOC_ID  = 'mcfranklin'; // shared doc both users read/write
+
+// Firebase app instances (set after initFirebase)
+let fbApp, fbAuth, fbDb, budgetDocRef;
+
+// --- Database helpers ---
+// All reads/writes go through this db object. Each write merges the full
+// collection so Firestore always reflects exactly what the app has.
+const db = {
+  // Saves all expenses as a single array field - no drift possible
+  async saveExpenses(expenses) {
+    await budgetDocRef.set({ expenses }, { merge: true });
+  },
+  async saveBudgets(categories, groupOrder) {
+    await budgetDocRef.set({ categories, groupOrder: groupOrder || [] }, { merge: true });
+  },
+  async saveRules(rules) {
+    await budgetDocRef.set({ rules }, { merge: true });
+  },
+  async saveFilters(filters) {
+    // Strip internal _open UI state before persisting
+    const clean = filters.map(f => { const { _open, ...rest } = f; return rest; });
+    await budgetDocRef.set({ filters: clean }, { merge: true });
+  },
+
+  // Loads all data from Firestore and updates state + localStorage
+  async loadAll() {
+    const snap = await budgetDocRef.get();
+    if (!snap.exists) {
+      // First time - write defaults so the doc exists
+      await budgetDocRef.set({
+        expenses: [],
+        categories: state.categories,
+        groupOrder: [],
+        rules: [],
+        filters: []
+      });
+      return;
+    }
+    const data = snap.data();
+    if (Array.isArray(data.expenses)) {
+      state.expenses = data.expenses.map(e => ({
+        ...e,
+        date: e.date || '',
+        amount: parseFloat(e.amount) || 0
+      }));
+      localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+    }
+    if (Array.isArray(data.categories) && data.categories.length > 0) {
+      state.categories = data.categories;
+      localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+    }
+    if (Array.isArray(data.groupOrder) && data.groupOrder.length > 0) {
+      state.groupOrder = data.groupOrder;
+      localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+    }
+    if (Array.isArray(data.rules)) {
+      state.rules = data.rules;
+      localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+    }
+    if (Array.isArray(data.filters)) {
+      state.filters = data.filters;
+      localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+    }
+  },
+
+  // Sets up a real-time listener - any change by Michelle shows up for Jeff instantly
+  listenForChanges() {
+    budgetDocRef.onSnapshot(snap => {
+      if (!snap.exists || snap.metadata.hasPendingWrites) return;
+      const data = snap.data();
+      let changed = false;
+      if (Array.isArray(data.expenses)) {
+        state.expenses = data.expenses.map(e => ({ ...e, amount: parseFloat(e.amount)||0 }));
+        localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+        changed = true;
+      }
+      if (Array.isArray(data.categories) && data.categories.length > 0) {
+        state.categories = data.categories;
+        localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+        changed = true;
+      }
+      if (Array.isArray(data.groupOrder)) {
+        state.groupOrder = data.groupOrder;
+        localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+      }
+      if (Array.isArray(data.rules)) {
+        state.rules = data.rules;
+        localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+      }
+      if (Array.isArray(data.filters)) {
+        state.filters = data.filters;
+        localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+      }
+      if (changed) {
+        renderDashboard();
+        renderExpenseTable();
+        renderBudgetEditor();
+        populateCategorySelect();
+      }
+    });
+  }
+};
+
+// --- Auth ---
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).catch(function(err) {
+    console.error('Sign-in failed', err);
+    alert('Sign-in failed: ' + err.message);
+  });
+}
+
+function signOut() {
+  fbAuth.signOut();
+}
+
+// --- Bootstrap ---
+function initFirebase() {
+  fbApp  = firebase.initializeApp(FIREBASE_CONFIG);
+  fbAuth = firebase.auth();
+  fbDb   = firebase.firestore();
+  budgetDocRef = fbDb.collection('budgets').doc(BUDGET_DOC_ID);
+
+  // Watch auth state - show sign-in screen or app accordingly
+  fbAuth.onAuthStateChanged(async user => {
+    const signinScreen = document.getElementById('signin-screen');
+    const appRoot = document.getElementById('app-root');
+    const banner  = document.getElementById('config-banner');
+
+    if (!user) {
+      // Not signed in
+      signinScreen.style.display = 'flex';
+      appRoot.style.display = 'none';
+      state.connected = false;
+      setConnStatus(false);
+      return;
+    }
+
+    // Check email is on the allow-list
+    if (!ALLOWED_EMAILS.includes(user.email)) {
+      fbAuth.signOut();
+      alert('Access denied. Only ' + ALLOWED_EMAILS.join(' and ') + ' can use this app.');
+      return;
+    }
+
+    // Signed in and authorized
+    signinScreen.style.display = 'none';
+    appRoot.style.display = 'block';
+    if (banner) banner.style.display = 'none';
+
+    // Update Settings account panel
+    const nameEl  = document.getElementById('settings-user-name');
+    const emailEl = document.getElementById('settings-user-email');
+    if (nameEl)  nameEl.textContent  = user.displayName || 'Signed in';
+    if (emailEl) emailEl.textContent = user.email;
+
+    // Update connection indicator
+    state.connected = true;
+    setConnStatus(true);
+
+    // Load data, set up real-time listener, render
+    try {
+      await db.loadAll();
+    } catch(e) {
+      console.error('Failed to load data', e);
+    }
+    db.listenForChanges();
+    initApp();
+  });
+}
+
+function setConnStatus(ok) {
+  const el = document.getElementById('conn-indicator');
+  if (!el) return;
+  el.className = 'conn-status ' + (ok ? 'connected' : 'disconnected');
+  el.innerHTML = `<span class="dot"></span> ${ok ? 'Synced' : 'Not signed in'}`;
+}
+
+// Kick off Firebase initialization when DOM is ready
+document.addEventListener('DOMContentLoaded', initFirebase);
+
+// --- Button Save State Utility ---------------------------------------
+// Transforms a button through saving -> saved -> idle states.
+// Usage: await btnSave(btn, async () => { ...your save logic... });
+// Optional errorLabel shown if the promise rejects.
+async function btnSave(btn, work, { successLabel = 'v Saved', errorLabel = 'x Try again', resetMs = 2200 } = {}) {
+  const orig = btn.innerHTML;
+  const origClass = btn.className;
+
+  // Saving state
+  btn.disabled = true;
+  btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saving';
+  btn.innerHTML = `<span class="btn-spinner"></span>Saving...`;
+
+  try {
+    await work();
+    // Saved state
+    btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saved';
+    btn.innerHTML = `v Saved`;
+    setTimeout(() => {
+      btn.className = origClass;
+      btn.innerHTML = orig;
+      btn.disabled = false;
+    }, resetMs);
+  } catch (err) {
+    // Error state - show briefly then reset
+    btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-error';
+    btn.innerHTML = errorLabel;
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.className = origClass;
+      btn.innerHTML = orig;
+    }, 3000);
+  }
+}
+
+// --- Init ------------------------------------------------------------
+// Firebase auth state drives everything. When signed in, load data and show app.
+// initFirebase() is called by the Firebase block above after SDK setup.
+function initApp() {
+  setTodayDate();
+  populateCategorySelect();
+  populateMonthPicker();
+  populateExpMonthPicker();
+  renderDashboard();
+  renderExpenseTable();
+  renderExpFilterChips();
+  renderBudgetEditor();
+  renderRulesEditor();
+  renderFiltersEditor();
+  updatePeriodLabel();
+}
+
+function setTodayDate() {
+  const d = new Date();
+  document.getElementById('exp-date').value = d.toISOString().split('T')[0];
+}
+
+// saveSheetUrl removed - using Firestore now
+
+// Sheet API replaced by Firestore - see db.* functions above
+
+
+// --- Tabs ------------------------------------------------------------
+// Shows the selected panel and highlights the active tab button.
+function switchTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// --- Period ----------------------------------------------------------
+// Controls the dashboard time period (monthly / YTD / full year / custom).
+// setPeriod updates state and re-renders the dashboard.
+// populateMonthPicker fills the custom-month dropdown with the last 24 months.
+function setPeriod(p) {
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  state.viewPeriod = p;
+  const picker = document.getElementById('month-picker');
+  picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  updatePeriodLabel();
+  renderDashboard();
+}
+
+function setCustomMonth(val) {
+  const [y, m] = val.split('-').map(Number);
+  state.viewYear = y; state.viewMonth = m - 1;
+  updatePeriodLabel();
+  renderDashboard();
+}
+
+function updatePeriodLabel() {
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  let label = '';
+  if (state.viewPeriod === 'monthly') {
+    state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear();
+    label = months[now.getMonth()] + ' ' + now.getFullYear();
+  } else if (state.viewPeriod === 'lastmonth') {
+    label = months[last.getMonth()] + ' ' + last.getFullYear();
+  } else if (state.viewPeriod === 'yearly') {
+    label = 'Full year ' + now.getFullYear();
+  } else if (state.viewPeriod === 'ytd') {
+    label = 'January - ' + months[now.getMonth()] + ' ' + now.getFullYear();
+  } else {
+    label = months[state.viewMonth] + ' ' + state.viewYear;
+  }
+  document.getElementById('period-label').textContent = label;
+}
+
+function populateMonthPicker() {
+  const sel = document.getElementById('month-picker');
+  const now = new Date();
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleString('default', {month:'long', year:'numeric'});
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    sel.appendChild(opt);
+  }
+}
+
+function populateExpMonthPicker() {
+  const sel = document.getElementById('exp-month-picker');
+  if (!sel) return;
+  const now = new Date();
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleString('default', {month:'long', year:'numeric'});
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    sel.appendChild(opt);
+  }
+}
+
+function setExpPeriod(p, e) {
+  document.querySelectorAll('#exp-period-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
+  e.currentTarget.classList.add('active');
+  state.expPeriod = p;
+  const picker = document.getElementById('exp-month-picker');
+  picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  renderExpenseTable();
+}
+
+function setExpCustomMonth(val) {
+  const [y, m] = val.split('-').map(Number);
+  state.expYear = y; state.expMonth = m - 1;
+  renderExpenseTable();
+}
+
+function setExpFilter(name, e) {
+  state.expFilter = name;
+  // Update chip active states
+  document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
+    .forEach(b => b.classList.remove('active'));
+  e.currentTarget.classList.add('active');
+  renderExpenseTable();
+}
+
+function renderExpFilterChips() {
+  const el = document.getElementById('exp-filter-chips');
+  if (!el) return;
+  el.innerHTML = state.filters.map(f =>
+    `<button class="filter-chip ${state.expFilter===f.name?'active':''}" onclick="setExpFilter('${escHtml(f.name)}',event)">${escHtml(f.name)}</button>`
+  ).join('');
+}
+
+function getExpFilteredExpenses() {
+  const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const knownCats = new Set(state.categories.map(c => c.name));
+  return state.expenses.filter(e => {
+    if (e.date) {
+      const d = new Date(e.date + 'T12:00:00');
+      if (state.expPeriod === 'monthly'   && !(d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear())) return false;
+      if (state.expPeriod === 'lastmonth' && !(d.getMonth()===last.getMonth()&&d.getFullYear()===last.getFullYear())) return false;
+      if (state.expPeriod === 'ytd'       && !(d.getFullYear()===now.getFullYear()&&d<=now)) return false;
+      if (state.expPeriod === 'yearly'    && d.getFullYear()!==now.getFullYear()) return false;
+      if (state.expPeriod === 'custom'    && !(d.getMonth()===state.expMonth&&d.getFullYear()===state.expYear)) return false;
+    }
+    if (state.expFilter === '__uncategorized__') {
+      return !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
+    }
+    if (state.expFilter) {
+      const f = state.filters.find(f => f.name === state.expFilter);
+      if (f && !f.categories.includes(e.category)) return false;
+    }
+    return true;
+  });
+}
+
+// --- Filter expenses by period ---------------------------------------
+// Returns the subset of expenses that fall within the dashboard's current
+// time period (monthly, YTD, yearly, or custom month).
+function getFilteredExpenses() {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return state.expenses.filter(e => {
+    if (!e.date) return false;
+    const d = new Date(e.date + 'T12:00:00');
+    if (state.viewPeriod === 'monthly') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if (state.viewPeriod === 'lastmonth') return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
+    if (state.viewPeriod === 'yearly') return d.getFullYear() === now.getFullYear();
+    if (state.viewPeriod === 'ytd') return d.getFullYear() === now.getFullYear() && d <= now;
+    if (state.viewPeriod === 'custom') return d.getMonth() === state.viewMonth && d.getFullYear() === state.viewYear;
+    return true;
+  });
+}
+
+function getBudgetForPeriod(cat) {
+  const b = parseFloat(cat.budget) || 0;
+  const now = new Date();
+  if (state.viewPeriod === 'yearly') return cat.period === 'yearly' ? b : b * 12;
+  if (state.viewPeriod === 'ytd') {
+    const monthsElapsed = now.getMonth() + 1;
+    return cat.period === 'yearly' ? (b / 12) * monthsElapsed : b * monthsElapsed;
+  }
+  // monthly, lastmonth, custom all use the single-month budget
+  return cat.period === 'yearly' ? b / 12 : b;
+}
+
+// --- Dashboard -------------------------------------------------------
+// renderFilterBar rebuilds the filter chip row (All + saved filters).
+// setFilter applies a named filter or clears it (null = All).
+// getVisibleCategories returns the category list after applying the active filter.
+// renderDashboard redraws summary cards and all category rows including YTD context.
+// Rebuilds the dashboard filter chip row - always flat, one chip per filter.
+function renderFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  if (!bar) return;
+  let html = `<button class="filter-chip ${!state.activeFilter ? 'active' : ''}" onclick="setFilter(null)">All</button>`;
+  state.filters.forEach(f => {
+    html += `<button class="filter-chip ${state.activeFilter === f.name ? 'active' : ''}" onclick="setFilter('${escHtml(f.name)}')">${escHtml(f.name)}</button>`;
+  });
+  bar.innerHTML = html;
+}
+
+function setFilter(name) {
+  state.activeFilter = name;
+  renderFilterBar();
+  renderDashboard();
+}
+
+function getVisibleCategories() {
+  if (!state.activeFilter) return state.categories;
+  const f = state.filters.find(f => f.name === state.activeFilter);
+  if (!f) return state.categories;
+  return state.categories.filter(c => f.categories.includes(c.name));
+}
+
+function renderDashboard() {
+  renderFilterBar();
+  const filtered = getFilteredExpenses();
+  const visibleCats = getVisibleCategories();
+
+  // For YTD: also get this-month expenses for per-category monthly comparison
+  const now = new Date();
+  const thisMonthExpenses = state.viewPeriod === 'ytd'
+    ? state.expenses.filter(e => { if (!e.date) return false; const d = new Date(e.date+'T12:00:00'); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); })
+    : null;
+
+  const totalSpent = filtered.filter(e => visibleCats.some(c=>c.name===e.category)).reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
+  const totalBudget = visibleCats.reduce((s,c) => s+getBudgetForPeriod(c), 0);
+  const remain = totalBudget - totalSpent;
+
+  const cards = document.getElementById('summary-cards');
+  const monthsElapsed = now.getMonth() + 1;
+  const ytdNote = state.viewPeriod === 'ytd' ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;">${monthsElapsed} months</div>` : '';
+  cards.innerHTML = `
+    <div class="summary-card"><div class="label">Budget</div><div class="value">$${fmt(totalBudget)}</div>${ytdNote}</div>
+    <div class="summary-card"><div class="label">Spent</div><div class="value ${totalSpent > totalBudget ? 'red' : ''}">$${fmt(totalSpent)}</div>${ytdNote}</div>
+    <div class="summary-card"><div class="label">Remaining</div><div class="value ${remain < 0 ? 'red' : 'green'}">$${fmt(Math.abs(remain))}${remain < 0 ? ' over' : ''}</div></div>
+    <div class="summary-card"><div class="label">Transactions</div><div class="value">${filtered.filter(e=>visibleCats.some(c=>c.name===e.category)).length}</div></div>
+  `;
+
+  const groups = {};
+  visibleCats.forEach(c => {
+    if (!groups[c.group]) groups[c.group] = [];
+    const spent = filtered.filter(e => e.category === c.name).reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
+    const budget = getBudgetForPeriod(c);
+
+    // YTD: compute this month's spend vs monthly budget for context
+    let ytdContext = null;
+    if (state.viewPeriod === 'ytd' && thisMonthExpenses) {
+      const monthSpent = thisMonthExpenses.filter(e=>e.category===c.name).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+      const monthBudget = c.period === 'yearly' ? (parseFloat(c.budget)||0)/12 : (parseFloat(c.budget)||0);
+      const ytdAvgMonthly = monthsElapsed > 0 ? spent / monthsElapsed : 0;
+      ytdContext = { monthSpent, monthBudget, ytdAvgMonthly };
+    }
+
+    groups[c.group].push({ ...c, spent, budget, ytdContext });
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([grp, cats]) => {
+    html += `<div class="group"><div class="group-header">${grp}</div>`;
+    cats.forEach(c => {
+      const pct = c.budget > 0 ? (c.spent / c.budget) * 100 : 0;
+      const barPct = Math.min(pct, 100);
+      const cls = pct >= 100 ? 'over' : pct >= 85 ? 'warn' : 'ok';
+      const remain = c.budget - c.spent;
+
+      let ytdHtml = '';
+      if (c.ytdContext) {
+        const { monthSpent, monthBudget, ytdAvgMonthly } = c.ytdContext;
+        const thisMonthOver = monthBudget > 0 && monthSpent > monthBudget;
+        const avgVsBudget = monthBudget > 0 ? ytdAvgMonthly / monthBudget : 0;
+        const trendCls = avgVsBudget > 1 ? 'ytd-over' : 'ytd-ok';
+        const trendLabel = avgVsBudget > 1
+          ? `avg $${fmt(ytdAvgMonthly)}/mo - over budget`
+          : `avg $${fmt(ytdAvgMonthly)}/mo - on track`;
+        ytdHtml = `<div class="cat-ytd"><span class="${trendCls}">${trendLabel}</span>${thisMonthOver ? ' * <span style="color:var(--warn)">this month over</span>' : ''}</div>`;
+      }
+
+      html += `<div class="cat-row">
+        <div class="cat-name">${c.name}<div class="sub">${c.period}</div>${ytdHtml}</div>
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill ${cls}" style="width:${barPct}%"></div></div>
+          <div class="progress-pct" style="${pct > 100 ? 'color:var(--danger);font-weight:700;' : ''}">${Math.round(pct)}%</div>
+        </div>
+        <div class="cat-budget">$${fmt(c.budget)}</div>
+        <div class="cat-spent">$${fmt(c.spent)}</div>
+        <div class="cat-remain ${remain < 0 ? 'neg' : 'pos'}">$${fmt(Math.abs(remain))}${remain < 0 ? ' over' : ''}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  document.getElementById('categories-view').innerHTML = html || '<div class="empty-state"><div class="icon">📊</div><p>No categories yet - add some in Budget.</p></div>';
+}
+
+// --- Transaction Table -----------------------------------------------
+// Renders the full transaction list respecting the active period, category
+// filter, and search query. Each row gets Edit (✎), Split (⇌), and Delete (✕)
+// buttons with hidden inline editor rows that open beneath each transaction.
+// Sorts by the clicked column; clicking the same column toggles asc/desc.
+function setSort(col) {
+  if (state.sortCol === col) {
+    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.sortCol = col;
+    // Sensible defaults: amount desc, everything else asc, date desc
+    state.sortDir = (col === 'amount' || col === 'date') ? 'desc' : 'asc';
+  }
+  renderExpenseTable();
+}
+
+function renderExpenseTable() {
+  renderExpFilterChips();
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const periodRows = getExpFilteredExpenses();
+  const filtered = periodRows.filter(e =>
+    !q || (e.description||'').toLowerCase().includes(q) ||
+          (e.category||'').toLowerCase().includes(q) ||
+          (e.memo||'').toLowerCase().includes(q)
+  );
+
+  // Sort by active column
+  const dir = state.sortDir === 'asc' ? 1 : -1;
+  const rows = [...filtered].sort((a, b) => {
+    switch (state.sortCol) {
+      case 'date':        return dir * (a.date||'').localeCompare(b.date||'');
+      case 'description': return dir * (a.description||'').toLowerCase().localeCompare((b.description||'').toLowerCase());
+      case 'category':    return dir * (a.category||'').toLowerCase().localeCompare((b.category||'').toLowerCase());
+      case 'who':         return dir * (a.who||'').toLowerCase().localeCompare((b.who||'').toLowerCase());
+      case 'amount':      return dir * ((parseFloat(a.amount)||0) - (parseFloat(b.amount)||0));
+      default:            return dir * (a.date||'').localeCompare(b.date||'');
+    }
+  });
+
+  const countEl = document.getElementById('exp-count');
+  const totalAmt = rows.reduce((s,e) => s + (parseFloat(e.amount)||0), 0);
+  if (countEl) countEl.textContent = `${rows.length} transaction${rows.length!==1?'s':''} * $${fmt(totalAmt)} total`;
+
+  if (!rows.length) {
+    document.getElementById('expense-table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>No transactions match this view.</p></div>';
+    return;
+  }
+
+  // Build sortable header - active column shows a direction arrow, others show a neutral indicator
+  const arrow = state.sortDir === 'asc' ? '↑' : '↓';
+  const th = (col, label, align) => {
+    const active = state.sortCol === col;
+    const icon = active ? arrow : '↕';
+    const style = align ? ` style="text-align:${align}"` : '';
+    return `<th class="sortable${active?' sort-active':''}"${style} onclick="setSort('${col}')">${label}<span class="sort-icon">${icon}</span></th>`;
+  };
+
+  let html = `<table class="expense-table"><thead><tr>
+    ${th('date','Date')}
+    ${th('description','Description')}
+    <th>Memo</th>
+    ${th('category','Category')}
+    ${th('who','Who')}
+    ${th('amount','Amount','right')}
+    <th></th>
+  </tr></thead><tbody>`;
+  rows.forEach((e) => {
+    const idx = state.expenses.indexOf(e);
+    const isSplit = !!e._splitFrom;
+    const isNeg = parseFloat(e.amount) < 0;
+    const isUncategorized = !e.category || e.category === 'Uncategorized' || !state.categories.some(c => c.name === e.category);
+    const amtDisplay = isNeg ? `-$${fmt(Math.abs(e.amount))}` : `$${fmt(e.amount)}`;
+    const amtColor = isNeg ? 'color:var(--green-dark)' : '';
+    const catBadge = isUncategorized
+      ? `<span class="badge" style="background:#FDF3E8;color:#854F0B;">Uncategorized</span>`
+      : `<span class="badge">${escHtml(e.category||'')}</span>`;
+    const actions = `<button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
+        <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px;padding:2px 7px;">⇌</button>
+        <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>`;
+
+    // Each data row gets class="expense-data-row" so mobile CSS can restyle as cards.
+    // Desktop: all cells visible in table layout.
+    // Mobile: cells rearranged into card sections via CSS classes.
+    html += `<tr id="exp-row-${idx}" class="expense-data-row" style="${isSplit ? 'opacity:.82;' : ''}">
+      <td class="date-col">${e.date||''}</td>
+      <td class="exp-card-main">
+        <div>
+          <div style="font-size:14px; font-weight:500;">${escHtml(e.description||'')}${isSplit ? ' <span style="font-size:11px;color:var(--muted);">(split)</span>' : ''}</div>
+          ${e.memo ? `<div style="font-size:12px;color:var(--muted);margin-top:1px;">${escHtml(e.memo)}</div>` : ''}
+        </div>
+        <div style="text-align:right; font-weight:600; white-space:nowrap; ${amtColor}">${amtDisplay}</div>
+      </td>
+      <td class="exp-card-meta">
+        ${catBadge}
+        <span style="font-size:12px;color:var(--muted);">${escHtml(e.who||'')}</span>
+        <span class="date-col" style="font-size:12px;color:var(--muted);display:none;" id="mobile-date-${idx}">${e.date||''}</span>
+      </td>
+      <td class="exp-card-actions">
+        ${actions}
+      </td>
+      <td class="exp-hide-mobile" style="text-align:right;font-weight:600;${amtColor};white-space:nowrap;">${amtDisplay}</td>
+      <td class="exp-hide-mobile text-muted">${escHtml(e.memo||'')}</td>
+    </tr>
+    <tr id="edit-row-${idx}" class="edit-expand-row" style="display:none;">
+      <td colspan="7" class="edit-row-container" style="padding:0;"></td>
+    </tr>
+    <tr id="split-row-${idx}" class="split-expand-row" style="display:none;">
+      <td colspan="7" class="split-row-container" style="padding:0;"></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('expense-table-wrap').innerHTML = html;
+}
+
+async function deleteExpense(idx) {
+  if (!confirm('Delete this expense?')) return;
+  state.expenses.splice(idx, 1);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderExpenseTable();
+  renderDashboard();
+  if (state.sheetUrl) {
+    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+  }
+}
+
+// --- Split Transaction ------------------------------------------------
+// Lets the user divide a single transaction (e.g. a Target run) into
+// multiple categorized lines that must add up to exactly the original amount.
+// openSplit initializes splitState and opens the editor row.
+// renderSplitEditor rebuilds the editor UI each time a line changes.
+// confirmSplit replaces the original transaction with the split rows.
+let splitState = {}; // { idx, total, lines: [{category, amount, memo}] }
+
+function openSplit(idx) {
+  // Close any other open split editors
+  document.querySelectorAll('[id^="split-row-"]').forEach(r => { r.style.display = 'none'; });
+
+  const e = state.expenses[idx];
+  if (!e) return;
+
+  splitState = {
+    idx,
+    total: parseFloat(e.amount) || 0,
+    lines: [
+      { category: e.category || state.categories[0]?.name || '', amount: '', memo: e.memo || '' },
+      { category: state.categories[0]?.name || '', amount: '', memo: '' }
+    ]
+  };
+
+  const row = document.getElementById(`split-row-${idx}`);
+  if (!row) return;
+  row.style.display = '';
+  renderSplitEditor(idx);
+  row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderSplitEditor(idx) {
+  const container = document.querySelector(`#split-row-${idx} td`);
+  if (!container) return;
+  const { total, lines } = splitState;
+  const allocated = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const remaining = total - allocated;
+  const isOver = remaining < -0.005;
+  const isExact = Math.abs(remaining) < 0.005;
+  const remainCls = isOver ? 'over' : isExact ? 'ok' : 'uneven';
+  const catOptions = state.categories.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
+
+  let linesHtml = lines.map((l, li) => `
+    <div class="split-line" id="split-line-${li}">
+      <select onchange="updateSplitLine(${li},'category',this.value)">
+        ${state.categories.map(c => `<option value="${escHtml(c.name)}" ${c.name===l.category?'selected':''}>${escHtml(c.name)}</option>`).join('')}
+      </select>
+      <input type="number" placeholder="Amount" value="${l.amount}" step="0.01"
+        onchange="updateSplitLine(${li},'amount',this.value)"
+        onblur="autoFillLast(${li})">
+      <button class="del-btn" onclick="removeSplitLine(${li})" style="font-size:14px;">✕</button>
+    </div>
+    <div style="padding:0 0 6px 0;">
+      <input type="text" placeholder="Memo (optional)" value="${escHtml(l.memo||'')}"
+        style="font-size:12px; padding:4px 8px; color:var(--muted); width:calc(100% - 44px);"
+        onchange="updateSplitLine(${li},'memo',this.value)">
+    </div>`).join('');
+
+  const totalDisplay = total < 0 ? `-$${fmt(Math.abs(total))}` : `$${fmt(total)}`;
+  container.innerHTML = `<div class="split-editor">
+    <div class="split-header">Split ${totalDisplay} - ${escHtml(state.expenses[idx]?.description || '')}</div>
+    ${linesHtml}
+    <div class="split-total-row">
+      <button class="split-btn split-btn-add" onclick="addSplitLine()">+ Add line</button>
+      <span class="text-muted" style="flex:1; font-size:13px;">
+        Allocated: $${fmt(allocated)} &nbsp;*&nbsp;
+        <span class="split-remaining ${remainCls}">
+          ${isExact ? 'v Fully allocated' : isOver ? `$${fmt(Math.abs(remaining))} over` : `$${fmt(remaining)} remaining`}
+        </span>
+      </span>
+      <button class="split-btn split-btn-cancel" onclick="closeSplit()">Cancel</button>
+      <button class="split-btn split-btn-confirm" onclick="confirmSplit()" ${isExact ? '' : 'disabled'}>Confirm split</button>
+    </div>
+  </div>`;
+}
+
+function updateSplitLine(li, key, val) {
+  splitState.lines[li][key] = val;
+  renderSplitEditor(splitState.idx);
+}
+
+function autoFillLast(li) {
+  // If this is the last line and there's still unallocated amount, fill it in.
+  // Works for both positive (expenses) and negative (refunds) totals.
+  const { total, lines } = splitState;
+  if (li !== lines.length - 1) return;
+  const allocatedExcludingLast = lines.slice(0, -1).reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const remaining = total - allocatedExcludingLast;
+  if (Math.abs(remaining) > 0.005 && !lines[li].amount) {
+    splitState.lines[li].amount = remaining.toFixed(2);
+    renderSplitEditor(splitState.idx);
+  }
+}
+
+function addSplitLine() {
+  splitState.lines.push({ category: state.categories[0]?.name || '', amount: '', memo: '' });
+  renderSplitEditor(splitState.idx);
+  // Focus the new amount field
+  setTimeout(() => {
+    const lines = document.querySelectorAll('.split-line');
+    lines[lines.length - 1]?.querySelector('input[type=number]')?.focus();
+  }, 30);
+}
+
+function removeSplitLine(li) {
+  if (splitState.lines.length <= 2) return; // keep at least 2
+  splitState.lines.splice(li, 1);
+  renderSplitEditor(splitState.idx);
+}
+
+function closeSplit() {
+  const row = document.getElementById(`split-row-${splitState.idx}`);
+  if (row) row.style.display = 'none';
+  splitState = {};
+}
+
+async function confirmSplit() {
+  const { idx, total, lines } = splitState;
+  const allocated = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  if (Math.abs(total - allocated) > 0.005) return;
+
+  const original = state.expenses[idx];
+  const splitRows = lines.map(l => ({
+    date: original.date,
+    amount: parseFloat(l.amount),
+    category: l.category,
+    description: original.description,
+    memo: l.memo || '',
+    who: original.who,
+    _splitFrom: original.description
+  }));
+
+  // Replace original with split rows
+  state.expenses.splice(idx, 1, ...splitRows);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  splitState = {};
+  renderExpenseTable();
+  renderDashboard();
+
+  if (state.sheetUrl) {
+    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+  }
+}
+
+// --- Edit Transaction -------------------------------------------------
+// Opens an inline edit form below the selected transaction row.
+// saveEdit validates, updates state, re-renders, and syncs to Sheets.
+function openEdit(idx) {
+  // Close any other open editors
+  document.querySelectorAll('[id^="edit-row-"],[id^="split-row-"]').forEach(r => r.style.display = 'none');
+
+  const e = state.expenses[idx];
+  if (!e) return;
+  const row = document.getElementById(`edit-row-${idx}`);
+  if (!row) return;
+  row.style.display = '';
+
+  const catOptions = state.categories.map(c =>
+    `<option value="${escHtml(c.name)}" ${c.name===e.category?'selected':''}>${escHtml(c.name)}</option>`
+  ).join('');
+
+  row.querySelector('td').innerHTML = `<div class="edit-form">
+    <div class="form-group">
+      <label class="field-label">Date</label>
+      <input type="date" id="edit-date-${idx}" value="${e.date||''}">
+    </div>
+    <div class="form-group">
+      <label class="field-label">Amount ($)</label>
+      <input type="number" id="edit-amount-${idx}" value="${e.amount||''}" step="0.01">
+    </div>
+    <div class="form-group">
+      <label class="field-label">Category</label>
+      <select id="edit-cat-${idx}">${catOptions}</select>
+    </div>
+    <div class="form-group">
+      <label class="field-label">Who</label>
+      <select id="edit-who-${idx}">
+        <option ${e.who==='Jeff'?'selected':''}>Jeff</option>
+        <option ${e.who==='Michelle'?'selected':''}>Michelle</option>
+        <option ${e.who==='Joint'?'selected':''}>Joint</option>
+        <option ${e.who==='Import'?'selected':''}>Import</option>
+      </select>
+    </div>
+    <div class="form-group full">
+      <label class="field-label">Description</label>
+      <input type="text" id="edit-desc-${idx}" value="${escHtml(e.description||'')}">
+    </div>
+    <div class="form-group full">
+      <label class="field-label">Memo <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">- optional</span></label>
+      <input type="text" id="edit-memo-${idx}" value="${escHtml(e.memo||'')}">
+    </div>
+  </div>
+  <div class="edit-actions">
+    <button class="btn btn-primary" style="font-size:13px; padding:7px 16px;" onclick="saveEdit(${idx})">Save changes</button>
+    <button class="btn btn-secondary" style="font-size:13px; padding:7px 16px;" onclick="closeEdit(${idx})">Cancel</button>
+  </div>`;
+
+  row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeEdit(idx) {
+  const row = document.getElementById(`edit-row-${idx}`);
+  if (row) row.style.display = 'none';
+}
+
+async function saveEdit(idx) {
+  const date = document.getElementById(`edit-date-${idx}`)?.value;
+  const amount = parseFloat(document.getElementById(`edit-amount-${idx}`)?.value);
+  const category = document.getElementById(`edit-cat-${idx}`)?.value;
+  const who = document.getElementById(`edit-who-${idx}`)?.value;
+  const description = document.getElementById(`edit-desc-${idx}`)?.value.trim();
+  const memo = document.getElementById(`edit-memo-${idx}`)?.value.trim();
+  const btn = document.querySelector(`#edit-row-${idx} .btn-primary`);
+
+  if (!date || isNaN(amount) || amount === 0 || !category) {
+    if (btn) { btn.className = btn.className + ' btn-error'; btn.textContent = 'x Fill in required fields'; setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save changes'; }, 2500); }
+    return;
+  }
+
+  state.expenses[idx] = { ...state.expenses[idx], date, amount, category, who, description, memo };
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+
+  if (btn) {
+    await btnSave(btn, async () => {
+      if (state.connected) { await db.saveBudgets(state.categories, state.groupOrder); }
+}
+
+// --- Rules -----------------------------------------------------------
+// Rules are plain text match strings. During CSV import, each transaction
+// description is checked against rules top-to-bottom; the first match wins.
+// applyRules() returns the matched category name, or null if none match.
+function renderRulesEditor() {
+  const el = document.getElementById('rules-editor');
+  if (!el) return;
+  if (!state.rules.length) {
+    el.innerHTML = '<p style="font-size:13px; color:var(--muted); padding:8px 0 4px;">No rules yet - add one below.</p>';
+    return;
+  }
+  let html = '';
+  state.rules.forEach((r, i) => {
+    const isDelete = r.action === 'delete';
+    html += `<div class="rule-row" id="rule-row-${i}"
+        draggable="true"
+        ondragstart="onRuleDragStart(event,${i})"
+        ondragover="onRuleDragOver(event)"
+        ondragleave="onRuleDragLeave(event)"
+        ondrop="onRuleDrop(event,${i})"
+        ondragend="onRuleDragEnd(event)">
+      <span class="rule-drag-handle" title="Drag to reorder">⠿</span>
+      <input type="text" value="${escHtml(r.contains)}" onchange="updateRule(${i},'contains',this.value)" placeholder="e.g. AUTOPAY">
+      <select onchange="updateRuleAction(${i},this.value)">
+        <option value="categorize" ${!isDelete?'selected':''}>Categorize as...</option>
+        <option value="delete" ${isDelete?'selected':''}>🗑 Delete on import</option>
+      </select>
+      <div class="rule-cat-col">
+        ${isDelete
+          ? `<span style="font-size:12px;color:var(--muted);padding:0 4px;align-self:center;display:block;">- deleted</span>`
+          : `<select onchange="updateRule(${i},'category',this.value)">
+              ${state.categories.map(c => `<option value="${escHtml(c.name)}" ${c.name===r.category?'selected':''}>${escHtml(c.name)}</option>`).join('')}
+            </select>`
+        }
+      </div>
+      <button class="del-btn" onclick="removeRule(${i})" style="display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+let ruleDragSrc = null;
+function onRuleDragStart(e, i) {
+  ruleDragSrc = i;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging');
+}
+function onRuleDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over-rule');
+}
+function onRuleDragLeave(e) { e.currentTarget.classList.remove('drag-over-rule'); }
+function onRuleDrop(e, targetIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-rule');
+  if (ruleDragSrc === null || ruleDragSrc === targetIdx) return;
+  const moved = state.rules.splice(ruleDragSrc, 1)[0];
+  const newIdx = ruleDragSrc < targetIdx ? targetIdx - 1 : targetIdx;
+  state.rules.splice(newIdx, 0, moved);
+  ruleDragSrc = null;
+  renderRulesEditor();
+}
+function onRuleDragEnd(e) {
+  e.currentTarget.classList.remove('dragging', 'drag-over-rule');
+  ruleDragSrc = null;
+}
+
+function updateRule(i, key, val) { state.rules[i][key] = val; }
+function updateRuleAction(i, val) {
+  state.rules[i].action = val;
+  if (val === 'delete') state.rules[i].category = '';
+  renderRulesEditor();
+}
+function removeRule(i) { state.rules.splice(i, 1); renderRulesEditor(); }
+function addRuleRow() {
+  const defaultCat = state.categories[0]?.name || '';
+  state.rules.push({ contains: '', action: 'categorize', category: defaultCat });
+  renderRulesEditor();
+  setTimeout(() => document.querySelector(`#rule-row-${state.rules.length-1} input`)?.focus(), 50);
+}
+
+async function saveRules() {
+  localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+
+  const btn = document.querySelector('[onclick="saveRules()"]');
+  await btnSave(btn, async () => {
+    if (state.connected) { await db.saveRules(state.rules); }
+
+  // After saving, check if any existing transactions are uncategorized and a
+  // categorize-type rule could now match them. If so, offer to apply.
+  const knownCats = new Set(state.categories.map(c => c.name));
+  const uncatTransactions = state.expenses.filter(e =>
+    !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category)
+  );
+  const matchable = uncatTransactions.filter(e => applyRules(e.description) && applyRules(e.description) !== '__delete__');
+
+  if (matchable.length > 0) {
+    setTimeout(() => {
+      const applyEl = document.getElementById('rules-apply-prompt');
+      if (applyEl) {
+        applyEl.style.display = 'block';
+        applyEl.innerHTML = `<div style="margin-top:10px; padding:10px 14px; background:var(--accent-light); border:1px solid var(--accent-mid); border-radius:var(--radius); font-size:13px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <span>These rules match <strong>${matchable.length} uncategorized transaction${matchable.length!==1?'s':''}</strong>. Apply now?</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;" onclick="applyRulesToUncategorized()">Apply rules</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:5px 14px;" onclick="document.getElementById('rules-apply-prompt').style.display='none'">Not now</button>
+          </div>
+        </div>`;
+      }
+    }, 400);
+  }
+}
+
+// Applies all categorize-type rules to currently uncategorized transactions,
+// then syncs the updated list to Google Sheets.
+async function applyRulesToUncategorized() {
+  const knownCats = new Set(state.categories.map(c => c.name));
+  let changed = 0, deleted = 0;
+
+  state.expenses = state.expenses.filter(e => {
+    const isUncat = !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
+    if (!isUncat) return true;
+    const match = applyRules(e.description);
+    if (match === '__delete__') { deleted++; return false; }
+    if (match) { e.category = match; changed++; }
+    return true;
+  });
+
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderExpenseTable();
+  renderDashboard();
+
+  const btn = document.querySelector('#rules-apply-prompt .btn-primary');
+  if (btn) {
+    await btnSave(btn, async () => {
+      if (state.connected) { await db.saveFilters(state.filters); }
+}
+
+// --- Utilities -------------------------------------------------------
+// applyRules: walks the rules list and returns the first matching category,
+// '__delete__' if a delete rule matches, or null if nothing matches.
+function applyRules(description) {
+  if (!description || !state.rules.length) return null;
+  const lower = description.toLowerCase();
+  for (const rule of state.rules) {
+    if (rule.contains && lower.includes(rule.contains.toLowerCase())) {
+      return rule.action === 'delete' ? '__delete__' : rule.category;
+    }
+  }
+  return null;
+}
+
+// escHtml: sanitizes strings before inserting into innerHTML to prevent XSS.
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// fmt: formats a number as a 2-decimal dollar amount string (no $ sign).
+function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+</script>
+
+</div><!-- /app-root -->
+</body>
+</html>
