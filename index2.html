@@ -1447,8 +1447,13 @@ async function saveEdit(idx) {
 
   if (btn) {
     await btnSave(btn, async () => {
-      if (state.connected) { await db.saveBudgets(state.categories, state.groupOrder); }
-}
+      if (state.connected) { await db.saveExpenses(state.expenses); }
+    });
+  }
+  }
+  renderExpenseTable();
+  renderDashboard();
+  closeEdit(idx);
 
 // --- Rules -----------------------------------------------------------
 // Rules are plain text match strings. During CSV import, each transaction
@@ -1537,6 +1542,7 @@ async function saveRules() {
   const btn = document.querySelector('[onclick="saveRules()"]');
   await btnSave(btn, async () => {
     if (state.connected) { await db.saveRules(state.rules); }
+  });
 
   // After saving, check if any existing transactions are uncategorized and a
   // categorize-type rule could now match them. If so, offer to apply.
@@ -1585,7 +1591,9 @@ async function applyRulesToUncategorized() {
   const btn = document.querySelector('#rules-apply-prompt .btn-primary');
   if (btn) {
     await btnSave(btn, async () => {
-      if (state.connected) { await db.saveFilters(state.filters); }
+      if (state.connected) { await db.saveExpenses(state.expenses); }
+    });
+  }
 }
 
 // --- Utilities -------------------------------------------------------
@@ -1612,4 +1620,4 @@ function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US', {minimumFrac
 
 </div><!-- /app-root -->
 </body>
-</html>
+</html> 
