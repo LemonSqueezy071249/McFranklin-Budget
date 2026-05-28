@@ -1610,7 +1610,425 @@ function applyRules(description) {
   return null;
 }
 
-// escHtml: sanitizes strings before inserting into innerHTML to prevent XSS.
+// --- Populate category select ---
+// Fills the category dropdown in Add Transaction and edit forms.
+function populateCategorySelect() {
+  const sel = document.getElementById('exp-cat');
+  if (sel) sel.innerHTML = state.categories.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
+}
+
+// --- Add Transaction ---
+async function addExpense() {
+  const date = document.getElementById('exp-date').value;
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const category = document.getElementById('exp-cat').value;
+  const description = document.getElementById('exp-desc').value.trim();
+  const memo = document.getElementById('exp-memo').value.trim();
+  const who = document.getElementById('exp-who').value;
+  const btn = document.querySelector('[onclick="addExpense()"]');
+
+  if (!date || isNaN(amount) || amount === 0 || !category) {
+    btn.className = btn.className + ' btn-error'; btn.textContent = 'x Fill in date, amount & category';
+    setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save Transaction'; }, 2800);
+    return;
+  }
+
+  const exp = { date, amount, category, description, memo, who };
+  state.expenses.push(exp);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderDashboard(); renderExpenseTable();
+  clearForm();
+
+  await btnSave(btn, async () => {
+    if (state.connected) { await db.saveExpenses(state.expenses); }
+  }, { successLabel: 'v Saved', resetMs: 1800 });
+}
+
+function clearForm() {
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-memo').value = '';
+  setTodayDate();
+}
+
+// --- CSV Import ---
+function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
+function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); parseCSV(e.dataTransfer.files[0]); }
+function handleCSVFile(e) { parseCSV(e.target.files[0]); }
+
+function cancelCSV() {
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-success').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  state.csvRows = []; state.csvHeaders = [];
+}
+
+function parseCSV(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    state.csvHeaders = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+    state.csvRows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
+    showCSVMapper();
+  };
+  reader.readAsText(file);
+}
+
+function showCSVMapper() {
+  document.getElementById('csv-preview').style.display = 'block';
+  document.getElementById('csv-success').style.display = 'none';
+  const fields = ['Date column', 'Debit / charge column', 'Description column'];
+  const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
+  let html = '';
+  ids.forEach((id, i) => {
+    html += `<div>
+      <label class="field-label" style="font-size:11px;">${fields[i]}</label>
+      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+        ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+  html += `<div>
+    <label class="field-label" style="font-size:11px;">Credit / refund column <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">- optional</span></label>
+    <select id="csv-credit-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      <option value="-1">None</option>
+      ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
+    </select>
+  </div>`;
+  html += `<div class="csv-map-full">
+    <label class="field-label" style="font-size:11px;">Fallback category</label>
+    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      <option value="Uncategorized" selected>Uncategorized (recommended)</option>
+      ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
+    </select>
+  </div>`;
+  document.getElementById('csv-map-grid').innerHTML = html;
+  const lower = state.csvHeaders.map(h => h.toLowerCase());
+  const guess = (words) => { const i = lower.findIndex(h => words.some(w => h.includes(w))); return i >= 0 ? i : 0; };
+  document.getElementById('csv-date-col').value   = guess(['date','time']);
+  document.getElementById('csv-amount-col').value = guess(['debit','charge','amount','sum']);
+  document.getElementById('csv-desc-col').value   = guess(['desc','memo','narr','payee','merchant','name']);
+  const creditIdx = lower.findIndex(h => ['credit','refund','payment','deposit'].some(w => h.includes(w)));
+  if (creditIdx >= 0) document.getElementById('csv-credit-col').value = creditIdx;
+  const rowCount = state.csvRows.length;
+  document.getElementById('csv-row-count').textContent = `${rowCount} transaction${rowCount!==1?'s':''} found`;
+  let t = `<table class="expense-table" style="font-size:12px;"><thead><tr>${state.csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
+  state.csvRows.forEach(r => { t += `<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}</tr>`; });
+  t += '</tbody></table>';
+  document.getElementById('csv-preview-table').innerHTML = t;
+}
+
+async function importCSV() {
+  const di  = parseInt(document.getElementById('csv-date-col').value);
+  const ai  = parseInt(document.getElementById('csv-amount-col').value);
+  const dci = parseInt(document.getElementById('csv-desc-col').value);
+  const ci  = parseInt(document.getElementById('csv-credit-col').value);
+  const fallbackCat = document.getElementById('csv-cat-col').value || 'Uncategorized';
+  const importBtn = document.getElementById('import-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing...'; }
+  if (cancelBtn) { cancelBtn.disabled = true; }
+
+  let added = 0, autoCat = 0, refunds = 0, deleted = 0;
+  const newTransactions = [];
+  for (const row of state.csvRows) {
+    const rawAmt = (row[ai]||'').replace(/[$,()]/g,'').trim();
+    let amount = parseFloat(rawAmt);
+    let isRefund = false;
+    if (ci >= 0 && row[ci]) {
+      const rawCredit = (row[ci]||'').replace(/[$,()]/g,'').trim();
+      const creditAmt = parseFloat(rawCredit);
+      if (!isNaN(creditAmt) && creditAmt !== 0) { amount = -Math.abs(creditAmt); isRefund = true; refunds++; }
+    }
+    if (isNaN(amount) || amount === 0) continue;
+    const dateRaw = row[di]||'';
+    let date = '';
+    try { const d = new Date(dateRaw); if (!isNaN(d)) date = d.toISOString().split('T')[0]; } catch{}
+    if (!date) date = dateRaw;
+    const description = row[dci]||'';
+    const ruleMatch = applyRules(description);
+    if (ruleMatch === '__delete__') { deleted++; continue; }
+    if (ruleMatch) autoCat++;
+    const category = ruleMatch || fallbackCat;
+    newTransactions.push({ date, amount, category, description, memo: '', who: 'Import' });
+    added++;
+  }
+
+  state.expenses.push(...newTransactions);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderDashboard(); renderExpenseTable();
+
+  if (state.connected) {
+    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+  }
+
+  if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Import Rows'; }
+  if (cancelBtn) { cancelBtn.disabled = false; }
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  state.csvRows = []; state.csvHeaders = [];
+
+  const uncat = added - autoCat - refunds;
+  const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
+  const deletedNote = deleted > 0 ? `, ${deleted} skipped by rules` : '';
+  const successEl = document.getElementById('csv-success');
+  successEl.style.display = 'block';
+  successEl.innerHTML = `<div class="status-msg success" style="display:block;">
+    Imported ${added} transaction${added!==1?'s':''}${refundNote}${deletedNote}${autoCat > 0 ? ` - ${autoCat} auto-categorized` : ''}${uncat > 0 ? `, <strong>${uncat} need categorizing</strong>` : ', all categorized!'}.
+  </div>`;
+  setTimeout(() => { successEl.style.display = 'none'; }, 8000);
+}
+
+// --- Budget Editor (grouped, drag-and-drop) ---
+// getGroups returns groups in saved order, appending any unknown ones.
+let dragSrc = null;
+
+function getGroups() {
+  const order = state.groupOrder || [];
+  const seen = new Set();
+  const groups = [];
+  order.forEach(g => { if (!seen.has(g)) { seen.add(g); groups.push(g); } });
+  state.categories.forEach(c => { if (!seen.has(c.group)) { seen.add(c.group); groups.push(c.group); } });
+  return groups;
+}
+
+function renderBudgetEditor() {
+  const el = document.getElementById('budget-editor');
+  if (!el) return;
+  const groups = getGroups();
+  let html = '';
+  groups.forEach(grp => {
+    const cats = state.categories.map((c,i) => ({...c, _i: i})).filter(c => c.group === grp);
+    html += `<div class="budget-group-block" data-group="${escHtml(grp)}"
+      draggable="true"
+      ondragstart="onGroupDragStart(event,'${escHtml(grp)}')"
+      ondragover="onGroupDragOver(event)"
+      ondragleave="onGroupDragLeave(event)"
+      ondrop="onGroupDrop(event,'${escHtml(grp)}')"
+      ondragend="onDragEnd(event)">
+      <div class="budget-group-header">
+        <span class="drag-handle" title="Drag to reorder group">&#11835;</span>
+        <input class="budget-group-name-input" type="text" value="${escHtml(grp)}"
+          onchange="renameGroup('${escHtml(grp)}',this.value)"
+          onclick="event.stopPropagation()"
+          placeholder="Group name">
+        <button class="group-del-btn" onclick="deleteGroup('${escHtml(grp)}')">Remove group</button>
+      </div>
+      <div class="budget-group-body" data-group="${escHtml(grp)}">`;
+    cats.forEach(c => {
+      html += `<div class="budget-item-row" data-cat-index="${c._i}" data-group="${escHtml(grp)}"
+          draggable="true"
+          ondragstart="onItemDragStart(event,${c._i})"
+          ondragover="onItemDragOver(event)"
+          ondragleave="onItemDragLeave(event)"
+          ondrop="onItemDrop(event,${c._i},'${escHtml(grp)}')"
+          ondragend="onDragEnd(event)">
+        <span class="item-drag-handle" title="Drag to reorder">&#11835;</span>
+        <input type="text" value="${escHtml(c.name)}" onchange="updateCat(${c._i},'name',this.value)" placeholder="Category name">
+        <input type="number" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00" step="0.01" min="0">
+        <select class="period-sel" onchange="updateCat(${c._i},'period',this.value)">
+          <option value="monthly" ${c.period==='monthly'?'selected':''}>Monthly</option>
+          <option value="yearly" ${c.period==='yearly'?'selected':''}>Yearly</option>
+        </select>
+        <button class="del-btn" onclick="removeCat(${c._i})">x</button>
+      </div>`;
+    });
+    html += `</div>
+      <button class="group-add-btn" onclick="addCategoryToGroup('${escHtml(grp)}')">+ Add item to ${escHtml(grp)}</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function updateCat(i, key, val) {
+  state.categories[i][key] = key === 'budget' ? parseFloat(val)||0 : val;
+}
+function removeCat(i) {
+  if (!confirm('Remove this budget item?')) return;
+  state.categories.splice(i, 1);
+  renderBudgetEditor();
+}
+function addCategoryToGroup(grp) {
+  state.categories.push({ group: grp, name: '', budget: 0, period: 'monthly' });
+  renderBudgetEditor();
+  setTimeout(() => {
+    const rows = document.querySelectorAll(`[data-group="${grp}"] .budget-item-row`);
+    const last = rows[rows.length - 1];
+    last && last.querySelector('input[type=text]') && last.querySelector('input[type=text]').focus();
+  }, 30);
+}
+function addGroupBlock() {
+  const name = 'New Group';
+  if (!state.groupOrder) state.groupOrder = getGroups();
+  state.groupOrder.push(name);
+  state.categories.push({ group: name, name: '', budget: 0, period: 'monthly' });
+  renderBudgetEditor();
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.budget-group-name-input');
+    const last = inputs[inputs.length-1];
+    if (last) { last.focus(); last.select(); }
+  }, 30);
+}
+function renameGroup(oldName, newName) {
+  if (!newName.trim() || newName === oldName) return;
+  state.categories.forEach(c => { if (c.group === oldName) c.group = newName; });
+  if (state.groupOrder) state.groupOrder = state.groupOrder.map(g => g === oldName ? newName : g);
+}
+function deleteGroup(grp) {
+  const count = state.categories.filter(c => c.group === grp).length;
+  if (count > 0 && !confirm(`Remove the "${grp}" group and its ${count} item${count!==1?'s':''}?`)) return;
+  state.categories = state.categories.filter(c => c.group !== grp);
+  if (state.groupOrder) state.groupOrder = state.groupOrder.filter(g => g !== grp);
+  renderBudgetEditor();
+}
+
+// --- Drag and Drop (Budget) ---
+function onGroupDragStart(e, grp) {
+  dragSrc = { type: 'group', groupName: grp };
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging-group');
+}
+function onGroupDragOver(e) {
+  if (!dragSrc || dragSrc.type !== 'group') return;
+  if (e.target.closest('.budget-item-row')) return;
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over-group');
+}
+function onGroupDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag-over-group');
+}
+function onGroupDrop(e, targetGrp) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-group');
+  if (!dragSrc || dragSrc.type !== 'group' || dragSrc.groupName === targetGrp) return;
+  const groups = getGroups();
+  const fromIdx = groups.indexOf(dragSrc.groupName);
+  const toIdx = groups.indexOf(targetGrp);
+  if (fromIdx < 0 || toIdx < 0) return;
+  groups.splice(fromIdx, 1);
+  groups.splice(toIdx, 0, dragSrc.groupName);
+  state.groupOrder = groups;
+  const reordered = [];
+  groups.forEach(g => reordered.push(...state.categories.filter(c => c.group === g)));
+  state.categories = reordered;
+  renderBudgetEditor();
+}
+function onItemDragStart(e, catIdx) {
+  if (dragSrc && dragSrc.type === 'group') return;
+  dragSrc = { type: 'item', catIndex: catIdx };
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation();
+  e.currentTarget.classList.add('dragging');
+}
+function onItemDragOver(e) {
+  if (!dragSrc || dragSrc.type !== 'item') return;
+  e.preventDefault(); e.stopPropagation();
+  e.currentTarget.classList.add('drag-over-item');
+}
+function onItemDragLeave(e) { e.currentTarget.classList.remove('drag-over-item'); }
+function onItemDrop(e, targetIdx, targetGrp) {
+  e.preventDefault(); e.stopPropagation();
+  e.currentTarget.classList.remove('drag-over-item');
+  if (!dragSrc || dragSrc.type !== 'item') return;
+  const fromIdx = dragSrc.catIndex;
+  if (fromIdx === targetIdx) return;
+  const item = state.categories.splice(fromIdx, 1)[0];
+  item.group = targetGrp;
+  const newTarget = fromIdx < targetIdx ? targetIdx - 1 : targetIdx;
+  state.categories.splice(newTarget, 0, item);
+  renderBudgetEditor();
+}
+function onDragEnd(e) {
+  e.currentTarget.style.opacity = '';
+  document.querySelectorAll('.drag-over-group,.drag-over-item,.dragging,.dragging-group').forEach(el => {
+    el.classList.remove('drag-over-group','drag-over-item','dragging','dragging-group');
+  });
+  dragSrc = null;
+}
+
+// --- Save Budgets ---
+async function saveBudgets() {
+  state.groupOrder = getGroups();
+  localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+  localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+  populateCategorySelect();
+  renderDashboard();
+  const btn = document.querySelector('[onclick="saveBudgets()"]');
+  await btnSave(btn, async () => {
+    if (state.connected) { await db.saveBudgets(state.categories, state.groupOrder); }
+  });
+}
+
+// --- Filters Editor ---
+// Each filter's checkbox list is collapsed by default; click to expand.
+function renderFiltersEditor() {
+  const el = document.getElementById('filters-editor');
+  if (!el) return;
+  if (!state.filters.length) {
+    el.innerHTML = '<p style="font-size:13px; color:var(--muted); padding:4px 0 4px;">No filters yet. Add one below.</p>';
+    return;
+  }
+  let html = '';
+  state.filters.forEach((f, fi) => {
+    const checkedCount = (f.categories||[]).length;
+    const isOpen = f._open || false;
+    html += `<div class="filter-editor-row" id="filter-row-${fi}">
+      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleFilterRow(${fi})">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)"
+            onclick="event.stopPropagation()"
+            placeholder="Filter name (e.g. Michelle)"
+            style="font-size:13px; font-weight:600; border:none; background:none; padding:0; width:160px; outline:none; color:var(--text);">
+          <span style="font-size:12px; color:var(--muted);">${checkedCount} categor${checkedCount!==1?'ies':'y'}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:12px; color:var(--muted);">${isOpen ? 'Collapse' : 'Edit'}</span>
+          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">x</button>
+        </div>
+      </div>
+      ${isOpen ? `<div class="filter-cat-grid" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        ${state.categories.map(c => `
+          <label class="filter-cat-check">
+            <input type="checkbox" ${(f.categories||[]).includes(c.name)?'checked':''} onchange="toggleFilterCat(${fi},'${escHtml(c.name)}',this.checked)">
+            <span>${escHtml(c.name)}</span>
+          </label>`).join('')}
+      </div>` : ''}
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function toggleFilterRow(fi) { state.filters[fi]._open = !state.filters[fi]._open; renderFiltersEditor(); }
+function updateFilterName(i, val) { state.filters[i].name = val; }
+function removeFilter(i) {
+  if (state.activeFilter === state.filters[i].name) state.activeFilter = null;
+  state.filters.splice(i, 1);
+  renderFiltersEditor();
+}
+function toggleFilterCat(fi, catName, checked) {
+  if (!state.filters[fi].categories) state.filters[fi].categories = [];
+  if (checked) { if (!state.filters[fi].categories.includes(catName)) state.filters[fi].categories.push(catName); }
+  else { state.filters[fi].categories = state.filters[fi].categories.filter(c => c !== catName); }
+}
+function addFilterRow() {
+  state.filters.push({ name: '', categories: [], _open: true });
+  renderFiltersEditor();
+  setTimeout(() => {
+    const row = document.querySelector(`#filter-row-${state.filters.length-1} input[type=text]`);
+    if (row) row.focus();
+  }, 50);
+}
+async function saveFilters() {
+  localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+  renderFilterBar();
+  const btn = document.querySelector('[onclick="saveFilters()"]');
+  await btnSave(btn, async () => {
+    if (state.connected) { await db.saveFilters(state.filters); }
+  });
+}
+
+
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 // fmt: formats a number as a 2-decimal dollar amount string (no $ sign).
