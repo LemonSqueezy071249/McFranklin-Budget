@@ -768,7 +768,7 @@ document.addEventListener('DOMContentLoaded', initFirebase);
 // Transforms a button through saving -> saved -> idle states.
 // Usage: await btnSave(btn, async () => { ...your save logic... });
 // Optional errorLabel shown if the promise rejects.
-async function btnSave(btn, work, { successLabel = 'v Saved', errorLabel = 'x Try again', resetMs = 2200 } = {}) {
+async function btnSave(btn, work, { successLabel = 'Saved', errorLabel = 'Try again', resetMs = 2200 } = {}) {
   const orig = btn.innerHTML;
   const origClass = btn.className;
 
@@ -781,7 +781,7 @@ async function btnSave(btn, work, { successLabel = 'v Saved', errorLabel = 'x Tr
     await work();
     // Saved state
     btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saved';
-    btn.innerHTML = `v Saved`;
+    btn.innerHTML = `Saved`;
     setTimeout(() => {
       btn.className = origClass;
       btn.innerHTML = orig;
@@ -1438,7 +1438,7 @@ async function saveEdit(idx) {
   const btn = document.querySelector(`#edit-row-${idx} .btn-primary`);
 
   if (!date || isNaN(amount) || amount === 0 || !category) {
-    if (btn) { btn.className = btn.className + ' btn-error'; btn.textContent = 'x Fill in required fields'; setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save changes'; }, 2500); }
+    if (btn) { btn.className = btn.className + ' btn-error'; btn.textContent = 'Fill in required fields'; setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save changes'; }, 2500); }
     return;
   }
 
@@ -1628,7 +1628,7 @@ async function addExpense() {
   const btn = document.querySelector('[onclick="addExpense()"]');
 
   if (!date || isNaN(amount) || amount === 0 || !category) {
-    btn.className = btn.className + ' btn-error'; btn.textContent = 'x Fill in date, amount & category';
+    btn.className = btn.className + ' btn-error'; btn.textContent = 'Fill in date, amount & category';
     setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save Transaction'; }, 2800);
     return;
   }
@@ -1641,7 +1641,7 @@ async function addExpense() {
 
   await btnSave(btn, async () => {
     if (state.connected) { await db.saveExpenses(state.expenses); }
-  }, { successLabel: 'v Saved', resetMs: 1800 });
+  }, { successLabel: 'Saved', resetMs: 1800 });
 }
 
 function clearForm() {
