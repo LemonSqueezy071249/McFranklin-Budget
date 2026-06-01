@@ -2,7 +2,7 @@
   "name": "McFranklin Budget",
   "short_name": "Budget",
   "description": "Family budget tracker",
-  "start_url": "",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#F2F2F7",
   "theme_color": "#5856D6",
