@@ -3,7 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>McFranklin Budget 1.22</title>
+<title>McFranklin Budget</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5856D6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Budget">
+<!-- Firebase SDKs (compat version - no bundler needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -36,7 +45,29 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
-  .app { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  .app { max-width: 1400px; margin: 0 auto; padding: 2rem 2rem 4rem; }
+
+  /* Wide desktop — sidebar layout for dashboard */
+  @media (min-width: 1100px) {
+    .app { padding: 2rem 3rem 4rem; }
+    #tab-dashboard.panel.active {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      grid-template-rows: auto auto 1fr;
+      gap: 0 2rem;
+    }
+    #summary-cards-wrap { grid-column: 1 / -1; }
+    #dashboard-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; margin-bottom: 1.75rem; }
+    #categories-view { grid-column: 1; }
+    #dashboard-sidebar { grid-column: 2; display: flex; flex-direction: column; gap: 14px; }
+    .cat-row { grid-template-columns: 240px 1fr 100px 100px 100px; }
+    .summary-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  @media (min-width: 1300px) {
+    .app { padding: 2rem 4rem 4rem; }
+    .cat-row { grid-template-columns: 260px 1fr 110px 110px 110px; }
+  }
   header { margin-bottom: 1.75rem; padding: 1.25rem 1.5rem; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; }
   header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.03em; background: linear-gradient(135deg, var(--accent) 0%, #9B59D0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   header p { color: var(--muted); font-size: 13px; margin-top: 1px; font-weight: 400; }
@@ -269,9 +300,45 @@
     .exp-count-search { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
     #search-input { width: 100% !important; max-width: 100% !important; }
   }
+  /* ── Sign-in screen ── */
+  #signin-screen { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; z-index:1000; }
+  #signin-screen h1 { font-size:1.6rem; font-weight:700; letter-spacing:-0.03em; background:linear-gradient(135deg,var(--accent) 0%,#9B59D0 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  #signin-screen p { color:var(--muted); font-size:14px; max-width:280px; text-align:center; line-height:1.6; }
+  .signin-btn { display:flex; align-items:center; gap:10px; background:white; border:1.5px solid var(--border-strong); border-radius:var(--radius); padding:12px 20px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:var(--shadow); transition:all .2s; font-family:var(--sans); color:var(--text); }
+  .signin-btn:hover { box-shadow:var(--shadow-lg); transform:translateY(-1px); }
+  .signin-btn img { width:20px; height:20px; }
+  #app-root { display:none; }
+
+  /* Dashboard sidebar (wide desktop only) */
+  #dashboard-sidebar { display: none; }
+  @media (min-width: 1100px) {
+    #dashboard-sidebar { display: flex; }
+  }
+  .sidebar-card { background: var(--surface); border-radius: var(--radius); padding: 1.1rem 1.25rem; box-shadow: var(--shadow-sm); width: 100%; }
+  .sidebar-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin-bottom: 12px; }
+  .sidebar-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .sidebar-row:last-child { border-bottom: none; }
+  .sidebar-row .name { color: var(--text-2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px; }
+  .sidebar-row .amt { font-weight: 600; white-space: nowrap; }
+  .sidebar-row .bar { height: 3px; background: var(--bg); border-radius: 99px; overflow: hidden; margin-top: 3px; }
+  .sidebar-row .bar-fill { height: 100%; border-radius: 99px; }
+  .sidebar-name-col { flex: 1; min-width: 0; }
 </style>
 </head>
 <body>
+<!-- Sign-in screen (shown before auth) -->
+<div id="signin-screen">
+  <div style="font-size:2.5rem;">💰</div>
+  <h1>McFranklin Budget</h1>
+  <p>Sign in with your Google account to access the family budget.</p>
+  <button class="signin-btn" onclick="signInWithGoogle()">
+    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+    Sign in with Google
+  </button>
+  <p style="font-size:12px; color:var(--muted);">Only jehffranklen@gmail.com and mlmcginty93@gmail.com have access.</p>
+</div>
+
+<div id="app-root">
 <div class="app">
   <header>
     <div>
@@ -282,8 +349,8 @@
   </header>
 
   <div id="config-banner">
-    <strong>⚙️ Setup required — connect your Google Sheet</strong>
-    <p>Go to the <strong>Settings</strong> tab and paste in your Google Apps Script Web App URL. See the setup instructions there for a step-by-step guide.</p>
+    <strong>⚙️ Connecting to Firebase…</strong>
+    <p>Signing in and loading your data. If this persists, check your internet connection.</p>
   </div>
 
   <div class="tabs">
@@ -296,8 +363,10 @@
   </div>
 
   <div id="tab-dashboard" class="panel active">
-    <div class="summary-grid" id="summary-cards"></div>
-    <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:1.5rem; align-items:flex-start;">
+    <div id="summary-cards-wrap">
+      <div class="summary-grid" id="summary-cards"></div>
+    </div>
+    <div id="dashboard-controls">
       <div class="period-toggle">
         <label>View:</label>
         <button class="toggle-btn active" onclick="setPeriod('monthly')">This month</button>
@@ -310,6 +379,9 @@
       <div id="filter-bar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;"></div>
     </div>
     <div id="categories-view"></div>
+    <div id="dashboard-sidebar">
+      <!-- Populated by renderDashboardSidebar() on wide screens -->
+    </div>
   </div>
 
   <div id="tab-expenses" class="panel">
@@ -437,23 +509,17 @@
     </div>
 
     <div class="settings-section">
-      <h2>Google Sheets Connection</h2>
-      <div style="background:#F0F7FF; border:1px solid #B5D4F4; border-radius:8px; padding:1rem; margin-bottom:1rem; font-size:13px; line-height:1.7; color:#185FA5;">
-        <strong>Setup guide (one-time, ~10 minutes):</strong><br>
-        1. Go to <a href="https://sheets.google.com" target="_blank" style="color:#185FA5;">sheets.google.com</a> and create a new spreadsheet. Name it "Family Budget".<br>
-        2. In the spreadsheet, click <strong>Extensions → Apps Script</strong>.<br>
-        3. Delete any existing code, then paste in the Apps Script code below and click Save.<br>
-        4. Click <strong>Deploy → New Deployment</strong>. Set type to "Web app". Set "Who has access" to "Anyone". Click Deploy.<br>
-        5. Copy the Web App URL it gives you and paste it below.<br>
-        6. The first time you run it, Google will ask you to authorize — click through.
+      <h2>Account</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div>
+          <div style="font-size:14px; font-weight:600;" id="settings-user-name">—</div>
+          <div style="font-size:13px; color:var(--muted);" id="settings-user-email">Not signed in</div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:13px;" onclick="signOut()">Sign out</button>
       </div>
-      <div style="background:#1A1A18; border-radius:8px; padding:1rem; font-family:monospace; font-size:11.5px; color:#A8D890; line-height:1.6; overflow-x:auto; margin-bottom:1rem; white-space:pre;" id="apps-script-code"></div>
-      <div class="form-group" style="max-width:520px;">
-        <label class="field-label">Web App URL</label>
-        <input type="url" id="sheet-url" placeholder="https://script.google.com/macros/s/..." oninput="saveSheetUrl()">
+      <div style="margin-top:1rem; padding:10px 14px; background:var(--accent-light); border-radius:var(--radius-sm); font-size:13px; color:var(--accent);">
+        ✓ Data syncs to Firestore in real time. Both Jeff and Michelle share the same budget automatically.
       </div>
-      <button class="btn btn-secondary" style="margin-top:8px; font-size:13px;" onclick="testConnection()">Test connection</button>
-      <div id="conn-status-msg" class="status-msg"></div>
     </div>
   </div>
 
@@ -463,7 +529,7 @@
         <h2 style="font-family:var(--serif); font-size:1.3rem; font-weight:400;">Budget Categories</h2>
         <span style="font-size:12px; color:var(--muted);">Drag ⠿ to reorder groups or items</span>
       </div>
-      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Set budgets, organize into groups, and drag to reorder. Changes sync to Google Sheets.</p>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Set budgets, organize into groups, and drag to reorder. Changes sync to Firestore.</p>
       <div style="display:grid; grid-template-columns:28px 1fr 120px 120px 36px; gap:8px; padding:0 10px; margin-bottom:4px;">
         <div></div>
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;">Category name</div>
@@ -479,7 +545,7 @@
 </div>
 
 <script>
-// ─── State ───────────────────────────────────────────────────────────
+// --- State -----------------------------------------------------------
 // DEFAULT_CATEGORIES is the fallback used only on first load if no data
 // exists in localStorage or Google Sheets yet.
 const DEFAULT_CATEGORIES = [
@@ -524,14 +590,14 @@ const DEFAULT_CATEGORIES = [
 ];
 
 // Central app state. Persisted to localStorage as a cache;
-// Google Sheets is the source of truth when connected.
+// Firestore is the source of truth when signed in.
 let state = {
   categories: JSON.parse(localStorage.getItem('budget_cats') || 'null') || DEFAULT_CATEGORIES,
   expenses: JSON.parse(localStorage.getItem('budget_expenses') || '[]'),
   rules: JSON.parse(localStorage.getItem('budget_rules') || '[]'),
   filters: JSON.parse(localStorage.getItem('budget_filters') || '[]'),
   groupOrder: JSON.parse(localStorage.getItem('budget_group_order') || 'null'),
-  sheetUrl: localStorage.getItem('budget_sheet_url') || '',
+  // Firestore is the backend - no URL needed
   viewPeriod: 'monthly',
   viewMonth: new Date().getMonth(),
   viewYear: new Date().getFullYear(),
@@ -547,117 +613,229 @@ let state = {
   connected: false
 };
 
-// ─── Apps Script Code ────────────────────────────────────────────────
-// This string is displayed in the Settings tab so the user can copy-paste
-// it into their Google Apps Script editor. It defines doGet (reads all data)
-// and doPost (writes expenses, budgets, rules, filters, group order).
-const APPS_SCRIPT = `function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+// --- Firebase + Firestore Backend ---
+// Replaces the Google Sheets backend entirely.
+// Two authorized users share a single budget document path in Firestore:
+//   /budgets/mcfranklin/{expenses, categories, groupOrder, rules, filters}
+// Auth is Google Sign-In - only the two registered emails can access data.
 
-  if (data.action === 'replaceExpenses') {
-    var sheet = ss.getSheetByName('Expenses') || ss.insertSheet('Expenses');
-    sheet.clearContents();
-    sheet.appendRow(['Date','Amount','Category','Description','Memo','Who']);
-    (data.expenses||[]).forEach(function(e){
-      sheet.appendRow([e.date, e.amount, e.category, e.description||'', e.memo||'', e.who||'']);
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDoFkm3Cll0WhmJppXEOfIvo5ucIafsDks",
+  authDomain: "mcfranklin-budget-app.firebaseapp.com",
+  projectId: "mcfranklin-budget-app",
+  storageBucket: "mcfranklin-budget-app.firebasestorage.app",
+  messagingSenderId: "1091989334005",
+  appId: "1:1091989334005:web:cda64638f3c2b612aea2bc"
+};
+
+const ALLOWED_EMAILS = ['jehffranklen@gmail.com', 'mlmcginty93@gmail.com'];
+const BUDGET_DOC_ID  = 'mcfranklin'; // shared doc both users read/write
+
+// Firebase app instances (set after initFirebase)
+let fbApp, fbAuth, fbDb, budgetDocRef;
+
+// --- Database helpers ---
+// All reads/writes go through this db object. Each write merges the full
+// collection so Firestore always reflects exactly what the app has.
+const db = {
+  // Saves all expenses as a single array field - no drift possible
+  async saveExpenses(expenses) {
+    await budgetDocRef.set({ expenses }, { merge: true });
+  },
+  async saveBudgets(categories, groupOrder) {
+    await budgetDocRef.set({ categories, groupOrder: groupOrder || [] }, { merge: true });
+  },
+  async saveRules(rules) {
+    await budgetDocRef.set({ rules }, { merge: true });
+  },
+  async saveFilters(filters) {
+    // Strip internal _open UI state before persisting
+    const clean = filters.map(f => { const { _open, ...rest } = f; return rest; });
+    await budgetDocRef.set({ filters: clean }, { merge: true });
+  },
+
+  // Loads all data from Firestore and updates state + localStorage
+  async loadAll() {
+    const snap = await budgetDocRef.get();
+    if (!snap.exists) {
+      // First time - write defaults so the doc exists
+      await budgetDocRef.set({
+        expenses: [],
+        categories: state.categories,
+        groupOrder: [],
+        rules: [],
+        filters: []
+      });
+      return;
+    }
+    const data = snap.data();
+    if (Array.isArray(data.expenses)) {
+      state.expenses = data.expenses.map(e => ({
+        ...e,
+        date: e.date || '',
+        amount: parseFloat(e.amount) || 0
+      }));
+      localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+    }
+    if (Array.isArray(data.categories) && data.categories.length > 0) {
+      state.categories = data.categories;
+      localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+    }
+    if (Array.isArray(data.groupOrder) && data.groupOrder.length > 0) {
+      state.groupOrder = data.groupOrder;
+      localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+    }
+    if (Array.isArray(data.rules)) {
+      state.rules = data.rules;
+      localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+    }
+    if (Array.isArray(data.filters)) {
+      state.filters = data.filters;
+      localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+    }
+  },
+
+  // Sets up a real-time listener - any change by Michelle shows up for Jeff instantly
+  listenForChanges() {
+    budgetDocRef.onSnapshot(snap => {
+      if (!snap.exists || snap.metadata.hasPendingWrites) return;
+      const data = snap.data();
+      let changed = false;
+      if (Array.isArray(data.expenses)) {
+        state.expenses = data.expenses.map(e => ({ ...e, amount: parseFloat(e.amount)||0 }));
+        localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+        changed = true;
+      }
+      if (Array.isArray(data.categories) && data.categories.length > 0) {
+        state.categories = data.categories;
+        localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+        changed = true;
+      }
+      if (Array.isArray(data.groupOrder)) {
+        state.groupOrder = data.groupOrder;
+        localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+      }
+      if (Array.isArray(data.rules)) {
+        state.rules = data.rules;
+        localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+      }
+      if (Array.isArray(data.filters)) {
+        state.filters = data.filters;
+        localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+      }
+      if (changed) {
+        renderDashboard();
+        renderExpenseTable();
+        renderBudgetEditor();
+        populateCategorySelect();
+      }
     });
-    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
   }
+};
 
-  if (data.action === 'saveBudgets') {
-    var bs = ss.getSheetByName('Budgets') || ss.insertSheet('Budgets');
-    bs.clearContents();
-    bs.appendRow(['Group','Name','Budget','Period']);
-    data.categories.forEach(function(c){ bs.appendRow([c.group,c.name,c.budget,c.period]); });
-    // Save group order in a named range / hidden sheet
-    var go = ss.getSheetByName('GroupOrder') || ss.insertSheet('GroupOrder');
-    go.clearContents();
-    (data.groupOrder||[]).forEach(function(g,i){ go.getRange(i+1,1).setValue(g); });
-    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  if (data.action === 'saveRules') {
-    var rs = ss.getSheetByName('Rules') || ss.insertSheet('Rules');
-    rs.clearContents();
-    rs.appendRow(['Contains','Category']);
-    (data.rules||[]).forEach(function(r){ rs.appendRow([r.contains, r.category]); });
-    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  if (data.action === 'saveFilters') {
-    var fs = ss.getSheetByName('Filters') || ss.insertSheet('Filters');
-    fs.clearContents();
-    fs.appendRow(['Name','Categories']);
-    (data.filters||[]).forEach(function(f){ fs.appendRow([f.name, (f.categories||[]).join('|')]); });
-    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({ok:false,error:'Unknown action'})).setMimeType(ContentService.MimeType.JSON);
+// --- Auth ---
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).catch(function(err) {
+    console.error('Sign-in failed', err);
+    alert('Sign-in failed: ' + err.message);
+  });
 }
 
-function doGet(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var result = { expenses: [], categories: [], rules: [], filters: [], groupOrder: [] };
+function signOut() {
+  fbAuth.signOut();
+}
 
-  var es = ss.getSheetByName('Expenses');
-  if (es && es.getLastRow() > 1) {
-    var rows = es.getRange(2, 1, es.getLastRow()-1, 6).getValues();
-    result.expenses = rows.map(function(r){ return {date:r[0],amount:r[1],category:r[2],description:r[3],memo:r[4],who:r[5]}; });
-  }
-  var bs = ss.getSheetByName('Budgets');
-  if (bs && bs.getLastRow() > 1) {
-    var brows = bs.getRange(2, 1, bs.getLastRow()-1, 4).getValues();
-    result.categories = brows.map(function(r){ return {group:r[0],name:r[1],budget:r[2],period:r[3]}; });
-  }
+// --- Bootstrap ---
+function initFirebase() {
+  fbApp  = firebase.initializeApp(FIREBASE_CONFIG);
+  fbAuth = firebase.auth();
+  fbDb   = firebase.firestore();
+  budgetDocRef = fbDb.collection('budgets').doc(BUDGET_DOC_ID);
 
-  var go = ss.getSheetByName('GroupOrder');
-  if (go && go.getLastRow() > 0) {
-    result.groupOrder = go.getRange(1,1,go.getLastRow(),1).getValues().map(function(r){ return r[0]; }).filter(Boolean);
-  }
+  // Watch auth state - show sign-in screen or app accordingly
+  fbAuth.onAuthStateChanged(async user => {
+    const signinScreen = document.getElementById('signin-screen');
+    const appRoot = document.getElementById('app-root');
+    const banner  = document.getElementById('config-banner');
 
-  var rs = ss.getSheetByName('Rules');
-  if (rs && rs.getLastRow() > 1) {
-    var rrows = rs.getRange(2, 1, rs.getLastRow()-1, 2).getValues();
-    result.rules = rrows.map(function(r){ return {contains:r[0],category:r[1]}; });
-  }
+    if (!user) {
+      // Not signed in
+      signinScreen.style.display = 'flex';
+      appRoot.style.display = 'none';
+      state.connected = false;
+      setConnStatus(false);
+      return;
+    }
 
-  var fs = ss.getSheetByName('Filters');
-  if (fs && fs.getLastRow() > 1) {
-    var frows = fs.getRange(2, 1, fs.getLastRow()-1, 2).getValues();
-    result.filters = frows.map(function(r){ return {name:r[0], categories: r[1]?r[1].toString().split('|'):[]}; });
-  }
+    // Check email is on the allow-list
+    if (!ALLOWED_EMAILS.includes(user.email)) {
+      fbAuth.signOut();
+      alert('Access denied. Only ' + ALLOWED_EMAILS.join(' and ') + ' can use this app.');
+      return;
+    }
 
-  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
-}`;
+    // Signed in and authorized
+    signinScreen.style.display = 'none';
+    appRoot.style.display = 'block';
+    if (banner) banner.style.display = 'none';
 
-document.getElementById('apps-script-code').textContent = APPS_SCRIPT;
+    // Update Settings account panel
+    const nameEl  = document.getElementById('settings-user-name');
+    const emailEl = document.getElementById('settings-user-email');
+    if (nameEl)  nameEl.textContent  = user.displayName || 'Signed in';
+    if (emailEl) emailEl.textContent = user.email;
 
-// ─── Button Save State Utility ───────────────────────────────────────
-// Transforms a button through saving → saved → idle states.
+    // Update connection indicator
+    state.connected = true;
+    setConnStatus(true);
+
+    // Load data, set up real-time listener, render
+    try {
+      await db.loadAll();
+    } catch(e) {
+      console.error('Failed to load data', e);
+    }
+    db.listenForChanges();
+    initApp();
+  });
+}
+
+function setConnStatus(ok) {
+  const el = document.getElementById('conn-indicator');
+  if (!el) return;
+  el.className = 'conn-status ' + (ok ? 'connected' : 'disconnected');
+  el.innerHTML = `<span class="dot"></span> ${ok ? 'Synced' : 'Not signed in'}`;
+}
+
+// Kick off Firebase initialization when DOM is ready
+document.addEventListener('DOMContentLoaded', initFirebase);
+
+// --- Button Save State Utility ---------------------------------------
+// Transforms a button through saving -> saved -> idle states.
 // Usage: await btnSave(btn, async () => { ...your save logic... });
 // Optional errorLabel shown if the promise rejects.
-async function btnSave(btn, work, { successLabel = '✓ Saved', errorLabel = '✗ Try again', resetMs = 2200 } = {}) {
+async function btnSave(btn, work, { successLabel = 'Saved', errorLabel = 'Try again', resetMs = 2200 } = {}) {
   const orig = btn.innerHTML;
   const origClass = btn.className;
 
   // Saving state
   btn.disabled = true;
   btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saving';
-  btn.innerHTML = `<span class="btn-spinner"></span>Saving…`;
+  btn.innerHTML = `<span class="btn-spinner"></span>Saving...`;
 
   try {
     await work();
     // Saved state
     btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saved';
-    btn.innerHTML = `✓ Saved`;
+    btn.innerHTML = `Saved`;
     setTimeout(() => {
       btn.className = origClass;
       btn.innerHTML = orig;
       btn.disabled = false;
     }, resetMs);
   } catch (err) {
-    // Error state — show briefly then reset
+    // Error state - show briefly then reset
     btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-error';
     btn.innerHTML = errorLabel;
     btn.disabled = false;
@@ -668,15 +846,10 @@ async function btnSave(btn, work, { successLabel = '✓ Saved', errorLabel = '�
   }
 }
 
-// ─── Init ────────────────────────────────────────────────────────────
-// Runs once on page load. Restores the sheet URL from localStorage,
-// kicks off a Sheets sync if connected, and renders all UI sections.
-window.onload = function() {
-  if (state.sheetUrl) {
-    document.getElementById('sheet-url').value = state.sheetUrl;
-    document.getElementById('config-banner').style.display = 'none';
-    fetchFromSheet().catch(() => setConnStatus(false));
-  }
+// --- Init ------------------------------------------------------------
+// Firebase auth state drives everything. When signed in, load data and show app.
+// initFirebase() is called by the Firebase block above after SDK setup.
+function initApp() {
   setTodayDate();
   populateCategorySelect();
   populateMonthPicker();
@@ -688,105 +861,19 @@ window.onload = function() {
   renderRulesEditor();
   renderFiltersEditor();
   updatePeriodLabel();
-};
+}
 
 function setTodayDate() {
   const d = new Date();
   document.getElementById('exp-date').value = d.toISOString().split('T')[0];
 }
 
-function saveSheetUrl() {
-  state.sheetUrl = document.getElementById('sheet-url').value.trim();
-  localStorage.setItem('budget_sheet_url', state.sheetUrl);
-  if (state.sheetUrl) document.getElementById('config-banner').style.display = 'none';
-}
+// saveSheetUrl removed - using Firestore now
 
-// ─── Sheet API ───────────────────────────────────────────────────────
-// sheetPost sends data to the Apps Script doPost handler.
-// Google Apps Script redirects POSTs, so we follow redirects and treat
-// any successful response (including opaque redirects) as ok.
-async function sheetPost(data) {
-  if (!state.sheetUrl) return { ok: false, error: 'No URL' };
-  // Google Apps Script redirects POST to GET — send as GET with payload in query string
-  // Use no-cors workaround: POST to the URL, accept opaque response as success
-  const res = await fetch(state.sheetUrl, {
-    method: 'POST',
-    redirect: 'follow',
-    body: JSON.stringify(data),
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-  });
-  // If we got a response (even a redirect), treat as ok
-  if (res.ok || res.type === 'opaqueredirect') return { ok: true };
-  // Try to parse JSON response
-  try { return await res.json(); } catch { return { ok: true }; }
-}
-
-// Fetches all data from Google Sheets (expenses, budgets, rules, filters,
-// group order) and updates both state and localStorage.
-// A cache-busting query param prevents stale CDN responses.
-async function fetchFromSheet() {
-  if (!state.sheetUrl) return;
-  const url = state.sheetUrl + (state.sheetUrl.includes('?') ? '&' : '?') + '_=' + Date.now();
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const text = await res.text();
-  let data;
-  try { data = JSON.parse(text); } catch(e) { throw new Error('Bad JSON response'); }
-  if (data.expenses) {
-    state.expenses = data.expenses.map(e => ({
-      ...e,
-      date: e.date ? new Date(e.date).toISOString().split('T')[0] : '',
-      amount: parseFloat(e.amount) || 0
-    }));
-    localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
-  }
-  if (data.categories && data.categories.length > 0) {
-    state.categories = data.categories;
-    localStorage.setItem('budget_cats', JSON.stringify(state.categories));
-  }
-  if (data.groupOrder && data.groupOrder.length > 0) {
-    state.groupOrder = data.groupOrder;
-    localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
-  }
-  if (data.rules) {
-    state.rules = data.rules;
-    localStorage.setItem('budget_rules', JSON.stringify(state.rules));
-  }
-  if (data.filters) {
-    state.filters = data.filters;
-    localStorage.setItem('budget_filters', JSON.stringify(state.filters));
-  }
-  state.connected = true;
-  setConnStatus(true);
-  renderDashboard();
-  renderExpenseTable();
-  renderExpFilterChips();
-  renderBudgetEditor();
-  renderRulesEditor();
-  renderFiltersEditor();
-  populateCategorySelect();
-}
-
-function setConnStatus(ok) {
-  const el = document.getElementById('conn-indicator');
-  el.className = 'conn-status ' + (ok ? 'connected' : 'disconnected');
-  el.innerHTML = `<span class="dot"></span> ${ok ? 'Connected to Google Sheets' : 'Not connected'}`;
-}
-
-async function testConnection() {
-  const msg = document.getElementById('conn-status-msg');
-  msg.className = 'status-msg'; msg.textContent = 'Testing...'; msg.style.display = 'block';
-  try {
-    await fetchFromSheet();
-    msg.className = 'status-msg success'; msg.textContent = '✓ Connected! Data synced from your sheet.';
-  } catch(e) {
-    setConnStatus(false);
-    msg.className = 'status-msg error'; msg.textContent = '✗ Could not connect. Check the URL and make sure "Who has access" is set to Anyone.';
-  }
-}
+// Sheet API replaced by Firestore - see db.* functions above
 
 
-// ─── Tabs ────────────────────────────────────────────────────────────
+// --- Tabs ------------------------------------------------------------
 // Shows the selected panel and highlights the active tab button.
 function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -795,7 +882,7 @@ function switchTab(name) {
   event.currentTarget.classList.add('active');
 }
 
-// ─── Period ──────────────────────────────────────────────────────────
+// --- Period ----------------------------------------------------------
 // Controls the dashboard time period (monthly / YTD / full year / custom).
 // setPeriod updates state and re-renders the dashboard.
 // populateMonthPicker fills the custom-month dropdown with the last 24 months.
@@ -829,7 +916,7 @@ function updatePeriodLabel() {
   } else if (state.viewPeriod === 'yearly') {
     label = 'Full year ' + now.getFullYear();
   } else if (state.viewPeriod === 'ytd') {
-    label = 'January – ' + months[now.getMonth()] + ' ' + now.getFullYear();
+    label = 'January - ' + months[now.getMonth()] + ' ' + now.getFullYear();
   } else {
     label = months[state.viewMonth] + ' ' + state.viewYear;
   }
@@ -919,7 +1006,7 @@ function getExpFilteredExpenses() {
   });
 }
 
-// ─── Filter expenses by period ───────────────────────────────────────
+// --- Filter expenses by period ---------------------------------------
 // Returns the subset of expenses that fall within the dashboard's current
 // time period (monthly, YTD, yearly, or custom month).
 function getFilteredExpenses() {
@@ -949,12 +1036,12 @@ function getBudgetForPeriod(cat) {
   return cat.period === 'yearly' ? b / 12 : b;
 }
 
-// ─── Dashboard ───────────────────────────────────────────────────────
+// --- Dashboard -------------------------------------------------------
 // renderFilterBar rebuilds the filter chip row (All + saved filters).
 // setFilter applies a named filter or clears it (null = All).
 // getVisibleCategories returns the category list after applying the active filter.
 // renderDashboard redraws summary cards and all category rows including YTD context.
-// Rebuilds the dashboard filter chip row — always flat, one chip per filter.
+// Rebuilds the dashboard filter chip row - always flat, one chip per filter.
 function renderFilterBar() {
   const bar = document.getElementById('filter-bar');
   if (!bar) return;
@@ -1037,9 +1124,9 @@ function renderDashboard() {
         const avgVsBudget = monthBudget > 0 ? ytdAvgMonthly / monthBudget : 0;
         const trendCls = avgVsBudget > 1 ? 'ytd-over' : 'ytd-ok';
         const trendLabel = avgVsBudget > 1
-          ? `avg $${fmt(ytdAvgMonthly)}/mo — over budget`
-          : `avg $${fmt(ytdAvgMonthly)}/mo — on track`;
-        ytdHtml = `<div class="cat-ytd"><span class="${trendCls}">${trendLabel}</span>${thisMonthOver ? ' · <span style="color:var(--warn)">this month over</span>' : ''}</div>`;
+          ? `avg $${fmt(ytdAvgMonthly)}/mo - over budget`
+          : `avg $${fmt(ytdAvgMonthly)}/mo - on track`;
+        ytdHtml = `<div class="cat-ytd"><span class="${trendCls}">${trendLabel}</span>${thisMonthOver ? ' * <span style="color:var(--warn)">this month over</span>' : ''}</div>`;
       }
 
       html += `<div class="cat-row">
@@ -1055,10 +1142,80 @@ function renderDashboard() {
     });
     html += '</div>';
   });
-  document.getElementById('categories-view').innerHTML = html || '<div class="empty-state"><div class="icon">📊</div><p>No categories yet — add some in Budget.</p></div>';
+  document.getElementById('categories-view').innerHTML = html || '<div class="empty-state"><div class="icon">📊</div><p>No categories yet - add some in Budget.</p></div>';
+  renderDashboardSidebar(filtered, visibleCats);
 }
 
-// ─── Transaction Table ───────────────────────────────────────────────
+// Sidebar: shown only on wide screens. Displays top spending categories
+// and a quick budget health summary for the current period.
+function renderDashboardSidebar(filtered, visibleCats) {
+  const el = document.getElementById('dashboard-sidebar');
+  if (!el) return;
+
+  // Top 7 categories by spend
+  const catSpend = visibleCats.map(c => ({
+    name: c.name,
+    spent: filtered.filter(e => e.category === c.name).reduce((s,e) => s+(parseFloat(e.amount)||0), 0),
+    budget: getBudgetForPeriod(c)
+  })).filter(c => c.spent > 0).sort((a,b) => b.spent - a.spent).slice(0, 7);
+
+  const maxSpent = catSpend[0]?.spent || 1;
+
+  let topHtml = catSpend.map(c => {
+    const pct = Math.min((c.spent / maxSpent) * 100, 100);
+    const overBudget = c.budget > 0 && c.spent > c.budget;
+    const barColor = overBudget ? 'var(--danger)' : 'var(--accent-mid)';
+    return `<div class="sidebar-row">
+      <div class="sidebar-name-col">
+        <div class="name" title="${escHtml(c.name)}">${escHtml(c.name)}</div>
+        <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
+      </div>
+      <div class="amt" style="${overBudget?'color:var(--danger)':''}">$${fmt(c.spent)}</div>
+    </div>`;
+  }).join('');
+  if (!topHtml) topHtml = '<p style="font-size:13px;color:var(--muted);">No spending this period.</p>';
+
+  // Budget health — count categories at various states
+  const allCats = visibleCats.map(c => {
+    const spent = filtered.filter(e => e.category === c.name).reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
+    const budget = getBudgetForPeriod(c);
+    const pct = budget > 0 ? spent / budget : 0;
+    return { pct, budget };
+  }).filter(c => c.budget > 0);
+
+  const onTrack  = allCats.filter(c => c.pct <= 0.85).length;
+  const nearLimit = allCats.filter(c => c.pct > 0.85 && c.pct <= 1).length;
+  const over     = allCats.filter(c => c.pct > 1).length;
+  const total    = allCats.length;
+
+  el.innerHTML = `
+    <div class="sidebar-card" style="margin-bottom:14px;">
+      <h3>Top spending</h3>
+      ${topHtml}
+    </div>
+    <div class="sidebar-card">
+      <h3>Budget health</h3>
+      ${total > 0 ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:12px;">
+          <div style="background:var(--green-light);border-radius:var(--radius-sm);padding:10px 6px;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--green-dark);">${onTrack}</div>
+            <div style="font-size:11px;color:var(--green-dark);font-weight:600;">On track</div>
+          </div>
+          <div style="background:var(--warn-light);border-radius:var(--radius-sm);padding:10px 6px;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--warn);">${nearLimit}</div>
+            <div style="font-size:11px;color:var(--warn);font-weight:600;">Near limit</div>
+          </div>
+          <div style="background:var(--danger-light);border-radius:var(--radius-sm);padding:10px 6px;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--danger);">${over}</div>
+            <div style="font-size:11px;color:var(--danger);font-weight:600;">Over</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);text-align:center;">${total} budgeted categories</div>
+      ` : '<p style="font-size:13px;color:var(--muted);">Set budgets to see health.</p>'}
+    </div>`;
+}
+
+// --- Transaction Table -----------------------------------------------
 // Renders the full transaction list respecting the active period, category
 // filter, and search query. Each row gets Edit (✎), Split (⇌), and Delete (✕)
 // buttons with hidden inline editor rows that open beneath each transaction.
@@ -1099,14 +1256,14 @@ function renderExpenseTable() {
 
   const countEl = document.getElementById('exp-count');
   const totalAmt = rows.reduce((s,e) => s + (parseFloat(e.amount)||0), 0);
-  if (countEl) countEl.textContent = `${rows.length} transaction${rows.length!==1?'s':''} · $${fmt(totalAmt)} total`;
+  if (countEl) countEl.textContent = `${rows.length} transaction${rows.length!==1?'s':''} * $${fmt(totalAmt)} total`;
 
   if (!rows.length) {
     document.getElementById('expense-table-wrap').innerHTML = '<div class="empty-state"><div class="icon">🧾</div><p>No transactions match this view.</p></div>';
     return;
   }
 
-  // Build sortable header — active column shows a direction arrow, others show a neutral indicator
+  // Build sortable header - active column shows a direction arrow, others show a neutral indicator
   const arrow = state.sortDir === 'asc' ? '↑' : '↓';
   const th = (col, label, align) => {
     const active = state.sortCol === col;
@@ -1179,14 +1336,11 @@ async function deleteExpense(idx) {
   renderExpenseTable();
   renderDashboard();
   if (state.sheetUrl) {
-    try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-    } catch { /* silent — local state is correct, sheet will resync on next load */ }
+    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
   }
 }
 
-// ─── Split Transaction ────────────────────────────────────────────────
+// --- Split Transaction ------------------------------------------------
 // Lets the user divide a single transaction (e.g. a Target run) into
 // multiple categorized lines that must add up to exactly the original amount.
 // openSplit initializes splitState and opens the editor row.
@@ -1246,14 +1400,14 @@ function renderSplitEditor(idx) {
 
   const totalDisplay = total < 0 ? `-$${fmt(Math.abs(total))}` : `$${fmt(total)}`;
   container.innerHTML = `<div class="split-editor">
-    <div class="split-header">Split ${totalDisplay} — ${escHtml(state.expenses[idx]?.description || '')}</div>
+    <div class="split-header">Split ${totalDisplay} - ${escHtml(state.expenses[idx]?.description || '')}</div>
     ${linesHtml}
     <div class="split-total-row">
       <button class="split-btn split-btn-add" onclick="addSplitLine()">+ Add line</button>
       <span class="text-muted" style="flex:1; font-size:13px;">
-        Allocated: $${fmt(allocated)} &nbsp;·&nbsp;
+        Allocated: $${fmt(allocated)} &nbsp;*&nbsp;
         <span class="split-remaining ${remainCls}">
-          ${isExact ? '✓ Fully allocated' : isOver ? `$${fmt(Math.abs(remaining))} over` : `$${fmt(remaining)} remaining`}
+          ${isExact ? 'v Fully allocated' : isOver ? `$${fmt(Math.abs(remaining))} over` : `$${fmt(remaining)} remaining`}
         </span>
       </span>
       <button class="split-btn split-btn-cancel" onclick="closeSplit()">Cancel</button>
@@ -1326,14 +1480,11 @@ async function confirmSplit() {
   renderDashboard();
 
   if (state.sheetUrl) {
-    try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-    } catch { /* silent */ }
+    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
   }
 }
 
-// ─── Edit Transaction ─────────────────────────────────────────────────
+// --- Edit Transaction -------------------------------------------------
 // Opens an inline edit form below the selected transaction row.
 // saveEdit validates, updates state, re-renders, and syncs to Sheets.
 function openEdit(idx) {
@@ -1377,7 +1528,7 @@ function openEdit(idx) {
       <input type="text" id="edit-desc-${idx}" value="${escHtml(e.description||'')}">
     </div>
     <div class="form-group full">
-      <label class="field-label">Memo <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">— optional</span></label>
+      <label class="field-label">Memo <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">- optional</span></label>
       <input type="text" id="edit-memo-${idx}" value="${escHtml(e.memo||'')}">
     </div>
   </div>
@@ -1404,7 +1555,7 @@ async function saveEdit(idx) {
   const btn = document.querySelector(`#edit-row-${idx} .btn-primary`);
 
   if (!date || isNaN(amount) || amount === 0 || !category) {
-    if (btn) { btn.className = btn.className + ' btn-error'; btn.textContent = '✗ Fill in required fields'; setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save changes'; }, 2500); }
+    if (btn) { btn.className = btn.className + ' btn-error'; btn.textContent = 'Fill in required fields'; setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save changes'; }, 2500); }
     return;
   }
 
@@ -1413,459 +1564,15 @@ async function saveEdit(idx) {
 
   if (btn) {
     await btnSave(btn, async () => {
-      if (state.sheetUrl) {
-        const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-        await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-      }
-    }, { resetMs: 1400 });
-  }
-
-  renderExpenseTable();
-  renderDashboard();
-}
-// Populates the category <select> in the Add Transaction form
-// and the edit form with the current category list.
-function populateCategorySelect() {
-  const sel = document.getElementById('exp-cat');
-  sel.innerHTML = state.categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-}
-
-// Reads the manual-entry form, validates, saves locally and to Sheets,
-// then clears the form. Used for transactions added one at a time.
-async function addExpense() {
-  const date = document.getElementById('exp-date').value;
-  const amount = parseFloat(document.getElementById('exp-amount').value);
-  const category = document.getElementById('exp-cat').value;
-  const description = document.getElementById('exp-desc').value.trim();
-  const memo = document.getElementById('exp-memo').value.trim();
-  const who = document.getElementById('exp-who').value;
-  const btn = document.querySelector('[onclick="addExpense()"]');
-
-  if (!date || isNaN(amount) || amount === 0 || !category) {
-    btn.className = btn.className + ' btn-error'; btn.textContent = '✗ Fill in date, amount & category';
-    setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save Transaction'; }, 2800);
-    return;
-  }
-
-  const exp = { date, amount, category, description, memo, who };
-  state.expenses.push(exp);
-  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
-  renderDashboard(); renderExpenseTable();
-  clearForm();
-
-  await btnSave(btn, async () => {
-    if (state.sheetUrl) {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-    }
-  }, { successLabel: '✓ Saved', resetMs: 1800 });
-}
-
-function clearForm() {
-  document.getElementById('exp-amount').value = '';
-  document.getElementById('exp-desc').value = '';
-  document.getElementById('exp-memo').value = '';
-  setTodayDate();
-}
-
-// ─── CSV Import ──────────────────────────────────────────────────────
-// Handles drag-and-drop or file-picker CSV uploads.
-// Parses the file, shows a column mapper, applies rules, then bulk-saves.
-
-function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
-function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
-function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); parseCSV(e.dataTransfer.files[0]); }
-function handleCSVFile(e) { parseCSV(e.target.files[0]); }
-
-// Resets the import UI and clears parsed CSV data from state
-function cancelCSV() {
-  document.getElementById('csv-preview').style.display = 'none';
-  document.getElementById('csv-success').style.display = 'none';
-  document.getElementById('csv-input').value = '';
-  state.csvRows = []; state.csvHeaders = [];
-}
-
-// Reads the file and parses it into headers + rows stored on state
-function parseCSV(file) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const lines = e.target.result.split('\n').filter(l => l.trim());
-    state.csvHeaders = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
-    state.csvRows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
-    showCSVMapper();
-  };
-  reader.readAsText(file);
-}
-
-// Renders the column-mapping UI after a CSV is parsed.
-// Includes an optional "Credit/Refund column" for banks like Citi that
-// put charges and refunds in separate columns.
-function showCSVMapper() {
-  document.getElementById('csv-preview').style.display = 'block';
-  document.getElementById('csv-success').style.display = 'none';
-
-  // Build dropdowns for the required columns
-  const fields = ['Date column', 'Debit / charge column', 'Description column'];
-  const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
-  let html = '';
-  ids.forEach((id, i) => {
-    html += `<div>
-      <label class="field-label" style="font-size:11px;">${fields[i]}</label>
-      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;">
-        ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
-      </select>
-    </div>`;
-  });
-
-  // Optional credit/refund column — defaults to "None"
-  html += `<div>
-    <label class="field-label" style="font-size:11px;">Credit / refund column <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">— optional</span></label>
-    <select id="csv-credit-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
-      <option value="-1">None</option>
-      ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
-    </select>
-  </div>`;
-
-  // Fallback category for rows that don't match any rule — spans full width
-  html += `<div class="csv-map-full">
-    <label class="field-label" style="font-size:11px;">Fallback category</label>
-    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
-      <option value="Uncategorized" selected>Uncategorized (recommended)</option>
-      ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
-    </select>
-  </div>`;
-
-  // csv-map-grid CSS class handles responsive layout
-  document.getElementById('csv-map-grid').innerHTML = html;
-
-  // Auto-detect common column name patterns
-  const lower = state.csvHeaders.map(h => h.toLowerCase());
-  const guess = (words) => { const i = lower.findIndex(h => words.some(w => h.includes(w))); return i >= 0 ? i : 0; };
-  document.getElementById('csv-date-col').value   = guess(['date','time']);
-  document.getElementById('csv-amount-col').value = guess(['debit','charge','amount','sum']);
-  document.getElementById('csv-desc-col').value   = guess(['desc','memo','narr','payee','merchant','name']);
-  // Try to auto-detect a credit column
-  const creditIdx = lower.findIndex(h => ['credit','refund','payment','deposit'].some(w => h.includes(w)));
-  if (creditIdx >= 0) document.getElementById('csv-credit-col').value = creditIdx;
-
-  // Show ALL rows in a scrollable preview table
-  const rowCount = state.csvRows.length;
-  document.getElementById('csv-row-count').textContent = `${rowCount} transaction${rowCount!==1?'s':''} found`;
-  let t = `<table class="expense-table" style="font-size:12px;"><thead><tr>${state.csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
-  state.csvRows.forEach(r => { t += `<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}</tr>`; });
-  t += '</tbody></table>';
-  document.getElementById('csv-preview-table').innerHTML = t;
-}
-
-// Processes the mapped columns, applies auto-categorization rules,
-// then saves all transactions at once (locally + to Google Sheets).
-// The import button is disabled for the duration to prevent double-imports.
-async function importCSV() {
-  const di  = parseInt(document.getElementById('csv-date-col').value);
-  const ai  = parseInt(document.getElementById('csv-amount-col').value);
-  const dci = parseInt(document.getElementById('csv-desc-col').value);
-  const ci  = parseInt(document.getElementById('csv-credit-col').value); // -1 = not used
-  const fallbackCat = document.getElementById('csv-cat-col').value || 'Uncategorized';
-
-  // Lock buttons so import can't be triggered twice
-  const importBtn = document.getElementById('import-btn');
-  const cancelBtn = document.getElementById('cancel-btn');
-  if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing…'; }
-  if (cancelBtn) { cancelBtn.disabled = true; }
-
-  let added = 0, autoCat = 0, refunds = 0, deleted = 0;
-  const newTransactions = [];
-
-  for (const row of state.csvRows) {
-    // Parse the debit/charge amount
-    const rawAmt = (row[ai]||'').replace(/[$,()]/g,'').trim();
-    let amount = parseFloat(rawAmt);
-
-    // If a credit/refund column is mapped and this row has a value there,
-    // treat it as a negative (refund) transaction instead
-    let isRefund = false;
-    if (ci >= 0 && row[ci]) {
-      const rawCredit = (row[ci]||'').replace(/[$,()]/g,'').trim();
-      const creditAmt = parseFloat(rawCredit);
-      if (!isNaN(creditAmt) && creditAmt !== 0) {
-        amount = -Math.abs(creditAmt); // store as negative to indicate refund
-        isRefund = true;
-        refunds++;
-      }
-    }
-
-    // Skip rows where neither column has a usable number
-    if (isNaN(amount) || amount === 0) continue;
-
-    // Parse the date, falling back to raw string if it can't be parsed
-    const dateRaw = row[di]||'';
-    let date = '';
-    try { const d = new Date(dateRaw); if (!isNaN(d)) date = d.toISOString().split('T')[0]; } catch{}
-    if (!date) date = dateRaw;
-
-    const description = row[dci]||'';
-
-    // Apply rules to auto-categorize — fallback to chosen fallback category
-    const ruleMatch = applyRules(description);
-
-    // If a delete rule matched, skip this row entirely
-    if (ruleMatch === '__delete__') { deleted++; continue; }
-
-    if (ruleMatch) autoCat++;
-    const category = ruleMatch || fallbackCat;
-
-    newTransactions.push({ date, amount, category, description, memo: '', who: 'Import' });
-    added++;
-  }
-
-  // Push all new transactions at once — no slow per-row loop
-  state.expenses.push(...newTransactions);
-  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
-  renderDashboard();
-  renderExpenseTable();
-
-  // Sync to Google Sheets in a single replaceExpenses call
-  if (state.sheetUrl) {
-    try {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 15000));
-      await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-    } catch { /* silent — data is safe locally, will sync on next load */ }
-  }
-
-  // Unlock buttons
-  if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Import Rows'; }
-  if (cancelBtn) { cancelBtn.disabled = false; }
-
-  // Hide the preview and reset the file input so the same file can be re-imported if needed
-  document.getElementById('csv-preview').style.display = 'none';
-  document.getElementById('csv-input').value = '';
-  state.csvRows = []; state.csvHeaders = [];
-
-  // Show a summary message
-  const uncat = added - autoCat - refunds;
-  const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
-  const deletedNote = deleted > 0 ? `, ${deleted} skipped by rules` : '';
-  const successEl = document.getElementById('csv-success');
-  successEl.style.display = 'block';
-  successEl.innerHTML = `<div class="status-msg success" style="display:block;">
-    ✓ Imported ${added} transaction${added!==1?'s':''}${refundNote}${deletedNote}${autoCat > 0 ? ` — ${autoCat} auto-categorized` : ''}${uncat > 0 ? `, <strong>${uncat} need categorizing</strong> (see Transactions → Uncategorized filter)` : ', all categorized!'}.
-  </div>`;
-  setTimeout(() => { successEl.style.display = 'none'; }, 8000);
-}
-
-// ─── Budget Editor (grouped, drag-and-drop) ──────────────────────────
-// Categories are organized into named groups (Giving, Housing, etc.).
-// Both groups and items within a group can be reordered by dragging the ⠿ handle.
-// getGroups() returns groups in their saved order, appending any unknown groups.
-// renderBudgetEditor() rebuilds the full editor UI from state.categories.
-let dragSrc = null; // { type:'item'|'group', groupName, catIndex }
-
-function getGroups() {
-  const order = state.groupOrder || [];
-  const seen = new Set();
-  const groups = [];
-  // First pass: ordered groups
-  order.forEach(g => {
-    if (!seen.has(g)) { seen.add(g); groups.push(g); }
-  });
-  // Second pass: any groups in categories not yet in order
-  state.categories.forEach(c => {
-    if (!seen.has(c.group)) { seen.add(c.group); groups.push(c.group); }
-  });
-  return groups;
-}
-
-function renderBudgetEditor() {
-  const el = document.getElementById('budget-editor');
-  if (!el) return;
-  const groups = getGroups();
-  let html = '';
-  groups.forEach(grp => {
-    const cats = state.categories.map((c,i) => ({...c, _i: i})).filter(c => c.group === grp);
-    html += `<div class="budget-group-block" data-group="${escHtml(grp)}" 
-      draggable="true"
-      ondragstart="onGroupDragStart(event,'${escHtml(grp)}')"
-      ondragover="onGroupDragOver(event)"
-      ondragleave="onGroupDragLeave(event)"
-      ondrop="onGroupDrop(event,'${escHtml(grp)}')"
-      ondragend="onDragEnd(event)">
-      <div class="budget-group-header">
-        <span class="drag-handle" title="Drag to reorder group">⠿</span>
-        <input class="budget-group-name-input" type="text" value="${escHtml(grp)}"
-          onchange="renameGroup('${escHtml(grp)}',this.value)"
-          onclick="event.stopPropagation()"
-          placeholder="Group name">
-        <button class="group-del-btn" onclick="deleteGroup('${escHtml(grp)}')">Remove group</button>
-      </div>
-      <div class="budget-group-body" data-group="${escHtml(grp)}">`;
-    cats.forEach(c => {
-      html += `<div class="budget-item-row" data-cat-index="${c._i}" data-group="${escHtml(grp)}"
-          draggable="true"
-          ondragstart="onItemDragStart(event,${c._i})"
-          ondragover="onItemDragOver(event)"
-          ondragleave="onItemDragLeave(event)"
-          ondrop="onItemDrop(event,${c._i},'${escHtml(grp)}')"
-          ondragend="onDragEnd(event)">
-        <span class="item-drag-handle" title="Drag to reorder">⠿</span>
-        <input type="text" value="${escHtml(c.name)}" onchange="updateCat(${c._i},'name',this.value)" placeholder="Category name">
-        <input type="number" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00" step="0.01" min="0">
-        <select class="period-sel" onchange="updateCat(${c._i},'period',this.value)">
-          <option value="monthly" ${c.period==='monthly'?'selected':''}>Monthly</option>
-          <option value="yearly" ${c.period==='yearly'?'selected':''}>Yearly</option>
-        </select>
-        <button class="del-btn" onclick="removeCat(${c._i})">✕</button>
-      </div>`;
+      if (state.connected) { await db.saveExpenses(state.expenses); }
     });
-    html += `</div>
-      <button class="group-add-btn" onclick="addCategoryToGroup('${escHtml(grp)}')">+ Add item to ${escHtml(grp)}</button>
-    </div>`;
-  });
-  el.innerHTML = html;
-}
-
-function updateCat(i, key, val) {
-  state.categories[i][key] = key === 'budget' ? parseFloat(val)||0 : val;
-}
-function removeCat(i) {
-  if (!confirm('Remove this budget item?')) return;
-  state.categories.splice(i, 1);
-  renderBudgetEditor();
-}
-function addCategoryToGroup(grp) {
-  state.categories.push({ group: grp, name: '', budget: 0, period: 'monthly' });
-  renderBudgetEditor();
-  // Focus the new row's name input
-  setTimeout(() => {
-    const rows = document.querySelectorAll(`[data-group="${grp}"] .budget-item-row`);
-    const last = rows[rows.length - 1];
-    last?.querySelector('input[type=text]')?.focus();
-  }, 30);
-}
-function addCategoryRow() { addCategoryToGroup(getGroups()[0] || 'Other'); }
-function addGroupBlock() {
-  const name = 'New Group';
-  if (!state.groupOrder) state.groupOrder = getGroups();
-  state.groupOrder.push(name);
-  state.categories.push({ group: name, name: '', budget: 0, period: 'monthly' });
-  renderBudgetEditor();
-  setTimeout(() => {
-    const inputs = document.querySelectorAll('.budget-group-name-input');
-    inputs[inputs.length-1]?.focus();
-    inputs[inputs.length-1]?.select();
-  }, 30);
-}
-function renameGroup(oldName, newName) {
-  if (!newName.trim() || newName === oldName) return;
-  state.categories.forEach(c => { if (c.group === oldName) c.group = newName; });
-  if (state.groupOrder) {
-    state.groupOrder = state.groupOrder.map(g => g === oldName ? newName : g);
   }
-  // Update filter references too
-  state.filters.forEach(f => {
-    if (f.categories) f.categories = f.categories; // categories use cat names not group names, so no change needed
-  });
-}
-function deleteGroup(grp) {
-  const count = state.categories.filter(c => c.group === grp).length;
-  if (count > 0 && !confirm(`Remove the "${grp}" group and its ${count} item${count!==1?'s':''}?`)) return;
-  state.categories = state.categories.filter(c => c.group !== grp);
-  if (state.groupOrder) state.groupOrder = state.groupOrder.filter(g => g !== grp);
-  renderBudgetEditor();
-}
-
-// ─── Drag and Drop ───────────────────────────────────────────────────
-// Group drag: dragging the ⠿ handle on a group header reorders entire groups.
-// Item drag: dragging the ⠿ handle on a row reorders items within or between groups.
-// stopPropagation on item events prevents item drags from triggering group drag handlers.
-function onGroupDragStart(e, grp) {
-  dragSrc = { type: 'group', groupName: grp };
-  e.dataTransfer.effectAllowed = 'move';
-  // Don't set opacity here — it causes flicker; use CSS class instead
-  e.currentTarget.classList.add('dragging-group');
-}
-function onGroupDragOver(e) {
-  if (!dragSrc || dragSrc.type !== 'group') return;
-  // Only highlight if hovering directly over the group block, not a child item row
-  if (e.target.closest('.budget-item-row')) return;
-  e.preventDefault();
-  e.currentTarget.classList.add('drag-over-group');
-}
-function onGroupDragLeave(e) {
-  // Only remove highlight when leaving the group block entirely
-  if (!e.currentTarget.contains(e.relatedTarget)) {
-    e.currentTarget.classList.remove('drag-over-group');
   }
-}
-function onGroupDrop(e, targetGrp) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('drag-over-group');
-  if (!dragSrc || dragSrc.type !== 'group' || dragSrc.groupName === targetGrp) return;
-  const groups = getGroups();
-  const fromIdx = groups.indexOf(dragSrc.groupName);
-  const toIdx = groups.indexOf(targetGrp);
-  if (fromIdx < 0 || toIdx < 0) return;
-  groups.splice(fromIdx, 1);
-  groups.splice(toIdx, 0, dragSrc.groupName);
-  state.groupOrder = groups;
-  const reordered = [];
-  groups.forEach(g => reordered.push(...state.categories.filter(c => c.group === g)));
-  state.categories = reordered;
-  renderBudgetEditor();
-}
-function onItemDragStart(e, catIdx) {
-  if (dragSrc?.type === 'group') return; // don't start item drag if group drag is active
-  dragSrc = { type: 'item', catIndex: catIdx };
-  e.dataTransfer.effectAllowed = 'move';
-  e.stopPropagation(); // prevent triggering group dragstart
-  e.currentTarget.classList.add('dragging');
-}
-function onItemDragOver(e) {
-  if (!dragSrc || dragSrc.type !== 'item') return;
-  e.preventDefault();
-  e.stopPropagation();
-  e.currentTarget.classList.add('drag-over-item');
-}
-function onItemDragLeave(e) { e.currentTarget.classList.remove('drag-over-item'); }
-function onItemDrop(e, targetIdx, targetGrp) {
-  e.preventDefault();
-  e.stopPropagation();
-  e.currentTarget.classList.remove('drag-over-item');
-  if (!dragSrc || dragSrc.type !== 'item') return;
-  const fromIdx = dragSrc.catIndex;
-  if (fromIdx === targetIdx) return;
-  const item = state.categories.splice(fromIdx, 1)[0];
-  item.group = targetGrp;
-  const newTarget = fromIdx < targetIdx ? targetIdx - 1 : targetIdx;
-  state.categories.splice(newTarget, 0, item);
-  renderBudgetEditor();
-}
-function onDragEnd(e) {
-  e.currentTarget.style.opacity = '';
-  document.querySelectorAll('.drag-over-group,.drag-over-item,.dragging,.dragging-group').forEach(el => {
-    el.classList.remove('drag-over-group','drag-over-item','dragging','dragging-group');
-  });
-  dragSrc = null;
-}
-
-// Saves categories + group order to localStorage and syncs to Sheets.
-// Also refreshes the category dropdown and re-renders the dashboard.
-async function saveBudgets() {
-  state.groupOrder = getGroups();
-  localStorage.setItem('budget_cats', JSON.stringify(state.categories));
-  localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
-  populateCategorySelect();
+  renderExpenseTable();
   renderDashboard();
+  closeEdit(idx);
 
-  const btn = document.querySelector('[onclick="saveBudgets()"]');
-  await btnSave(btn, async () => {
-    if (state.sheetUrl) {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'saveBudgets', categories: state.categories, groupOrder: state.groupOrder }), timeout]);
-    }
-  });
-}
-
-// ─── Rules ───────────────────────────────────────────────────────────
+// --- Rules -----------------------------------------------------------
 // Rules are plain text match strings. During CSV import, each transaction
 // description is checked against rules top-to-bottom; the first match wins.
 // applyRules() returns the matched category name, or null if none match.
@@ -1873,7 +1580,7 @@ function renderRulesEditor() {
   const el = document.getElementById('rules-editor');
   if (!el) return;
   if (!state.rules.length) {
-    el.innerHTML = '<p style="font-size:13px; color:var(--muted); padding:8px 0 4px;">No rules yet — add one below.</p>';
+    el.innerHTML = '<p style="font-size:13px; color:var(--muted); padding:8px 0 4px;">No rules yet - add one below.</p>';
     return;
   }
   let html = '';
@@ -1889,12 +1596,12 @@ function renderRulesEditor() {
       <span class="rule-drag-handle" title="Drag to reorder">⠿</span>
       <input type="text" value="${escHtml(r.contains)}" onchange="updateRule(${i},'contains',this.value)" placeholder="e.g. AUTOPAY">
       <select onchange="updateRuleAction(${i},this.value)">
-        <option value="categorize" ${!isDelete?'selected':''}>Categorize as…</option>
+        <option value="categorize" ${!isDelete?'selected':''}>Categorize as...</option>
         <option value="delete" ${isDelete?'selected':''}>🗑 Delete on import</option>
       </select>
       <div class="rule-cat-col">
         ${isDelete
-          ? `<span style="font-size:12px;color:var(--muted);padding:0 4px;align-self:center;display:block;">— deleted</span>`
+          ? `<span style="font-size:12px;color:var(--muted);padding:0 4px;align-self:center;display:block;">- deleted</span>`
           : `<select onchange="updateRule(${i},'category',this.value)">
               ${state.categories.map(c => `<option value="${escHtml(c.name)}" ${c.name===r.category?'selected':''}>${escHtml(c.name)}</option>`).join('')}
             </select>`
@@ -1951,10 +1658,7 @@ async function saveRules() {
 
   const btn = document.querySelector('[onclick="saveRules()"]');
   await btnSave(btn, async () => {
-    if (state.sheetUrl) {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'saveRules', rules: state.rules }), timeout]);
-    }
+    if (state.connected) { await db.saveRules(state.rules); }
   });
 
   // After saving, check if any existing transactions are uncategorized and a
@@ -2004,19 +1708,377 @@ async function applyRulesToUncategorized() {
   const btn = document.querySelector('#rules-apply-prompt .btn-primary');
   if (btn) {
     await btnSave(btn, async () => {
-      if (state.sheetUrl) {
-        const timeout = new Promise((_, rej) => setTimeout(() => rej(), 15000));
-        await Promise.race([sheetPost({ action: 'replaceExpenses', expenses: state.expenses }), timeout]);
-      }
-    }, { successLabel: `✓ Updated ${changed}${deleted?' (+'+deleted+' deleted)':''}`, resetMs: 3000 });
-    setTimeout(() => { document.getElementById('rules-apply-prompt').style.display = 'none'; }, 3500);
+      if (state.connected) { await db.saveExpenses(state.expenses); }
+    });
   }
 }
 
-// ─── Filters ─────────────────────────────────────────────────────────
-// Saved filters are named subsets of categories (e.g. "Michelle" = her categories).
-// They appear as chip buttons on both the Dashboard and Transactions tab.
-// Filter selections are not persisted — they reset on page load.
+// --- Utilities -------------------------------------------------------
+// applyRules: walks the rules list and returns the first matching category,
+// '__delete__' if a delete rule matches, or null if nothing matches.
+function applyRules(description) {
+  if (!description || !state.rules.length) return null;
+  const lower = description.toLowerCase();
+  for (const rule of state.rules) {
+    if (rule.contains && lower.includes(rule.contains.toLowerCase())) {
+      return rule.action === 'delete' ? '__delete__' : rule.category;
+    }
+  }
+  return null;
+}
+
+// --- Populate category select ---
+// Fills the category dropdown in Add Transaction and edit forms.
+function populateCategorySelect() {
+  const sel = document.getElementById('exp-cat');
+  if (sel) sel.innerHTML = state.categories.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
+}
+
+// --- Add Transaction ---
+async function addExpense() {
+  const date = document.getElementById('exp-date').value;
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const category = document.getElementById('exp-cat').value;
+  const description = document.getElementById('exp-desc').value.trim();
+  const memo = document.getElementById('exp-memo').value.trim();
+  const who = document.getElementById('exp-who').value;
+  const btn = document.querySelector('[onclick="addExpense()"]');
+
+  if (!date || isNaN(amount) || amount === 0 || !category) {
+    btn.className = btn.className + ' btn-error'; btn.textContent = 'Fill in date, amount & category';
+    setTimeout(() => { btn.className = btn.className.replace(' btn-error',''); btn.textContent = 'Save Transaction'; }, 2800);
+    return;
+  }
+
+  const exp = { date, amount, category, description, memo, who };
+  state.expenses.push(exp);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderDashboard(); renderExpenseTable();
+  clearForm();
+
+  await btnSave(btn, async () => {
+    if (state.connected) { await db.saveExpenses(state.expenses); }
+  }, { successLabel: 'Saved', resetMs: 1800 });
+}
+
+function clearForm() {
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-memo').value = '';
+  setTodayDate();
+}
+
+// --- CSV Import ---
+function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
+function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); parseCSV(e.dataTransfer.files[0]); }
+function handleCSVFile(e) { parseCSV(e.target.files[0]); }
+
+function cancelCSV() {
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-success').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  state.csvRows = []; state.csvHeaders = [];
+}
+
+function parseCSV(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    state.csvHeaders = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+    state.csvRows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
+    showCSVMapper();
+  };
+  reader.readAsText(file);
+}
+
+function showCSVMapper() {
+  document.getElementById('csv-preview').style.display = 'block';
+  document.getElementById('csv-success').style.display = 'none';
+  const fields = ['Date column', 'Debit / charge column', 'Description column'];
+  const ids = ['csv-date-col', 'csv-amount-col', 'csv-desc-col'];
+  let html = '';
+  ids.forEach((id, i) => {
+    html += `<div>
+      <label class="field-label" style="font-size:11px;">${fields[i]}</label>
+      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+        ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+  html += `<div>
+    <label class="field-label" style="font-size:11px;">Credit / refund column <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">- optional</span></label>
+    <select id="csv-credit-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      <option value="-1">None</option>
+      ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
+    </select>
+  </div>`;
+  html += `<div class="csv-map-full">
+    <label class="field-label" style="font-size:11px;">Fallback category</label>
+    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      <option value="Uncategorized" selected>Uncategorized (recommended)</option>
+      ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
+    </select>
+  </div>`;
+  document.getElementById('csv-map-grid').innerHTML = html;
+  const lower = state.csvHeaders.map(h => h.toLowerCase());
+  const guess = (words) => { const i = lower.findIndex(h => words.some(w => h.includes(w))); return i >= 0 ? i : 0; };
+  document.getElementById('csv-date-col').value   = guess(['date','time']);
+  document.getElementById('csv-amount-col').value = guess(['debit','charge','amount','sum']);
+  document.getElementById('csv-desc-col').value   = guess(['desc','memo','narr','payee','merchant','name']);
+  const creditIdx = lower.findIndex(h => ['credit','refund','payment','deposit'].some(w => h.includes(w)));
+  if (creditIdx >= 0) document.getElementById('csv-credit-col').value = creditIdx;
+  const rowCount = state.csvRows.length;
+  document.getElementById('csv-row-count').textContent = `${rowCount} transaction${rowCount!==1?'s':''} found`;
+  let t = `<table class="expense-table" style="font-size:12px;"><thead><tr>${state.csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
+  state.csvRows.forEach(r => { t += `<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}</tr>`; });
+  t += '</tbody></table>';
+  document.getElementById('csv-preview-table').innerHTML = t;
+}
+
+async function importCSV() {
+  const di  = parseInt(document.getElementById('csv-date-col').value);
+  const ai  = parseInt(document.getElementById('csv-amount-col').value);
+  const dci = parseInt(document.getElementById('csv-desc-col').value);
+  const ci  = parseInt(document.getElementById('csv-credit-col').value);
+  const fallbackCat = document.getElementById('csv-cat-col').value || 'Uncategorized';
+  const importBtn = document.getElementById('import-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing...'; }
+  if (cancelBtn) { cancelBtn.disabled = true; }
+
+  let added = 0, autoCat = 0, refunds = 0, deleted = 0;
+  const newTransactions = [];
+  for (const row of state.csvRows) {
+    const rawAmt = (row[ai]||'').replace(/[$,()]/g,'').trim();
+    let amount = parseFloat(rawAmt);
+    let isRefund = false;
+    if (ci >= 0 && row[ci]) {
+      const rawCredit = (row[ci]||'').replace(/[$,()]/g,'').trim();
+      const creditAmt = parseFloat(rawCredit);
+      if (!isNaN(creditAmt) && creditAmt !== 0) { amount = -Math.abs(creditAmt); isRefund = true; refunds++; }
+    }
+    if (isNaN(amount) || amount === 0) continue;
+    const dateRaw = row[di]||'';
+    let date = '';
+    try { const d = new Date(dateRaw); if (!isNaN(d)) date = d.toISOString().split('T')[0]; } catch{}
+    if (!date) date = dateRaw;
+    const description = row[dci]||'';
+    const ruleMatch = applyRules(description);
+    if (ruleMatch === '__delete__') { deleted++; continue; }
+    if (ruleMatch) autoCat++;
+    const category = ruleMatch || fallbackCat;
+    newTransactions.push({ date, amount, category, description, memo: '', who: 'Import' });
+    added++;
+  }
+
+  state.expenses.push(...newTransactions);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderDashboard(); renderExpenseTable();
+
+  if (state.connected) {
+    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+  }
+
+  if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Import Rows'; }
+  if (cancelBtn) { cancelBtn.disabled = false; }
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  state.csvRows = []; state.csvHeaders = [];
+
+  const uncat = added - autoCat - refunds;
+  const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
+  const deletedNote = deleted > 0 ? `, ${deleted} skipped by rules` : '';
+  const successEl = document.getElementById('csv-success');
+  successEl.style.display = 'block';
+  successEl.innerHTML = `<div class="status-msg success" style="display:block;">
+    Imported ${added} transaction${added!==1?'s':''}${refundNote}${deletedNote}${autoCat > 0 ? ` - ${autoCat} auto-categorized` : ''}${uncat > 0 ? `, <strong>${uncat} need categorizing</strong>` : ', all categorized!'}.
+  </div>`;
+  setTimeout(() => { successEl.style.display = 'none'; }, 8000);
+}
+
+// --- Budget Editor (grouped, drag-and-drop) ---
+// getGroups returns groups in saved order, appending any unknown ones.
+let dragSrc = null;
+
+function getGroups() {
+  const order = state.groupOrder || [];
+  const seen = new Set();
+  const groups = [];
+  order.forEach(g => { if (!seen.has(g)) { seen.add(g); groups.push(g); } });
+  state.categories.forEach(c => { if (!seen.has(c.group)) { seen.add(c.group); groups.push(c.group); } });
+  return groups;
+}
+
+function renderBudgetEditor() {
+  const el = document.getElementById('budget-editor');
+  if (!el) return;
+  const groups = getGroups();
+  let html = '';
+  groups.forEach(grp => {
+    const cats = state.categories.map((c,i) => ({...c, _i: i})).filter(c => c.group === grp);
+    html += `<div class="budget-group-block" data-group="${escHtml(grp)}"
+      draggable="true"
+      ondragstart="onGroupDragStart(event,'${escHtml(grp)}')"
+      ondragover="onGroupDragOver(event)"
+      ondragleave="onGroupDragLeave(event)"
+      ondrop="onGroupDrop(event,'${escHtml(grp)}')"
+      ondragend="onDragEnd(event)">
+      <div class="budget-group-header">
+        <span class="drag-handle" title="Drag to reorder group">⠿</span>
+        <input class="budget-group-name-input" type="text" value="${escHtml(grp)}"
+          onchange="renameGroup('${escHtml(grp)}',this.value)"
+          onclick="event.stopPropagation()"
+          placeholder="Group name">
+        <button class="group-del-btn" onclick="deleteGroup('${escHtml(grp)}')">Remove group</button>
+      </div>
+      <div class="budget-group-body" data-group="${escHtml(grp)}">`;
+    cats.forEach(c => {
+      html += `<div class="budget-item-row" data-cat-index="${c._i}" data-group="${escHtml(grp)}"
+          draggable="true"
+          ondragstart="onItemDragStart(event,${c._i})"
+          ondragover="onItemDragOver(event)"
+          ondragleave="onItemDragLeave(event)"
+          ondrop="onItemDrop(event,${c._i},'${escHtml(grp)}')"
+          ondragend="onDragEnd(event)">
+        <span class="item-drag-handle" title="Drag to reorder">⠿</span>
+        <input type="text" value="${escHtml(c.name)}" onchange="updateCat(${c._i},'name',this.value)" placeholder="Category name">
+        <input type="number" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00" step="0.01" min="0">
+        <select class="period-sel" onchange="updateCat(${c._i},'period',this.value)">
+          <option value="monthly" ${c.period==='monthly'?'selected':''}>Monthly</option>
+          <option value="yearly" ${c.period==='yearly'?'selected':''}>Yearly</option>
+        </select>
+        <button class="del-btn" onclick="removeCat(${c._i})">x</button>
+      </div>`;
+    });
+    html += `</div>
+      <button class="group-add-btn" onclick="addCategoryToGroup('${escHtml(grp)}')">+ Add item to ${escHtml(grp)}</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function updateCat(i, key, val) {
+  state.categories[i][key] = key === 'budget' ? parseFloat(val)||0 : val;
+}
+function removeCat(i) {
+  if (!confirm('Remove this budget item?')) return;
+  state.categories.splice(i, 1);
+  renderBudgetEditor();
+}
+function addCategoryToGroup(grp) {
+  state.categories.push({ group: grp, name: '', budget: 0, period: 'monthly' });
+  renderBudgetEditor();
+  setTimeout(() => {
+    const rows = document.querySelectorAll(`[data-group="${grp}"] .budget-item-row`);
+    const last = rows[rows.length - 1];
+    last && last.querySelector('input[type=text]') && last.querySelector('input[type=text]').focus();
+  }, 30);
+}
+function addGroupBlock() {
+  const name = 'New Group';
+  if (!state.groupOrder) state.groupOrder = getGroups();
+  state.groupOrder.push(name);
+  state.categories.push({ group: name, name: '', budget: 0, period: 'monthly' });
+  renderBudgetEditor();
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.budget-group-name-input');
+    const last = inputs[inputs.length-1];
+    if (last) { last.focus(); last.select(); }
+  }, 30);
+}
+function renameGroup(oldName, newName) {
+  if (!newName.trim() || newName === oldName) return;
+  state.categories.forEach(c => { if (c.group === oldName) c.group = newName; });
+  if (state.groupOrder) state.groupOrder = state.groupOrder.map(g => g === oldName ? newName : g);
+}
+function deleteGroup(grp) {
+  const count = state.categories.filter(c => c.group === grp).length;
+  if (count > 0 && !confirm(`Remove the "${grp}" group and its ${count} item${count!==1?'s':''}?`)) return;
+  state.categories = state.categories.filter(c => c.group !== grp);
+  if (state.groupOrder) state.groupOrder = state.groupOrder.filter(g => g !== grp);
+  renderBudgetEditor();
+}
+
+// --- Drag and Drop (Budget) ---
+function onGroupDragStart(e, grp) {
+  dragSrc = { type: 'group', groupName: grp };
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging-group');
+}
+function onGroupDragOver(e) {
+  if (!dragSrc || dragSrc.type !== 'group') return;
+  if (e.target.closest('.budget-item-row')) return;
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over-group');
+}
+function onGroupDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drag-over-group');
+}
+function onGroupDrop(e, targetGrp) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-group');
+  if (!dragSrc || dragSrc.type !== 'group' || dragSrc.groupName === targetGrp) return;
+  const groups = getGroups();
+  const fromIdx = groups.indexOf(dragSrc.groupName);
+  const toIdx = groups.indexOf(targetGrp);
+  if (fromIdx < 0 || toIdx < 0) return;
+  groups.splice(fromIdx, 1);
+  groups.splice(toIdx, 0, dragSrc.groupName);
+  state.groupOrder = groups;
+  const reordered = [];
+  groups.forEach(g => reordered.push(...state.categories.filter(c => c.group === g)));
+  state.categories = reordered;
+  renderBudgetEditor();
+}
+function onItemDragStart(e, catIdx) {
+  if (dragSrc && dragSrc.type === 'group') return;
+  dragSrc = { type: 'item', catIndex: catIdx };
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation();
+  e.currentTarget.classList.add('dragging');
+}
+function onItemDragOver(e) {
+  if (!dragSrc || dragSrc.type !== 'item') return;
+  e.preventDefault(); e.stopPropagation();
+  e.currentTarget.classList.add('drag-over-item');
+}
+function onItemDragLeave(e) { e.currentTarget.classList.remove('drag-over-item'); }
+function onItemDrop(e, targetIdx, targetGrp) {
+  e.preventDefault(); e.stopPropagation();
+  e.currentTarget.classList.remove('drag-over-item');
+  if (!dragSrc || dragSrc.type !== 'item') return;
+  const fromIdx = dragSrc.catIndex;
+  if (fromIdx === targetIdx) return;
+  const item = state.categories.splice(fromIdx, 1)[0];
+  item.group = targetGrp;
+  const newTarget = fromIdx < targetIdx ? targetIdx - 1 : targetIdx;
+  state.categories.splice(newTarget, 0, item);
+  renderBudgetEditor();
+}
+function onDragEnd(e) {
+  e.currentTarget.style.opacity = '';
+  document.querySelectorAll('.drag-over-group,.drag-over-item,.dragging,.dragging-group').forEach(el => {
+    el.classList.remove('drag-over-group','drag-over-item','dragging','dragging-group');
+  });
+  dragSrc = null;
+}
+
+// --- Save Budgets ---
+async function saveBudgets() {
+  state.groupOrder = getGroups();
+  localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+  localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+  populateCategorySelect();
+  renderDashboard();
+  const btn = document.querySelector('[onclick="saveBudgets()"]');
+  await btnSave(btn, async () => {
+    if (state.connected) { await db.saveBudgets(state.categories, state.groupOrder); }
+  });
+}
+
+// --- Filters Editor ---
+// Each filter's checkbox list is collapsed by default; click to expand.
 function renderFiltersEditor() {
   const el = document.getElementById('filters-editor');
   if (!el) return;
@@ -2038,8 +2100,8 @@ function renderFiltersEditor() {
           <span style="font-size:12px; color:var(--muted);">${checkedCount} categor${checkedCount!==1?'ies':'y'}</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:12px; color:var(--muted);">${isOpen ? '▲ Collapse' : '▼ Edit'}</span>
-          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">✕</button>
+          <span style="font-size:12px; color:var(--muted);">${isOpen ? 'Collapse' : 'Edit'}</span>
+          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">x</button>
         </div>
       </div>
       ${isOpen ? `<div class="filter-cat-grid" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
@@ -2054,11 +2116,7 @@ function renderFiltersEditor() {
   el.innerHTML = html;
 }
 
-function toggleFilterRow(fi) {
-  state.filters[fi]._open = !state.filters[fi]._open;
-  renderFiltersEditor();
-}
-
+function toggleFilterRow(fi) { state.filters[fi]._open = !state.filters[fi]._open; renderFiltersEditor(); }
 function updateFilterName(i, val) { state.filters[i].name = val; }
 function removeFilter(i) {
   if (state.activeFilter === state.filters[i].name) state.activeFilter = null;
@@ -2073,42 +2131,35 @@ function toggleFilterCat(fi, catName, checked) {
 function addFilterRow() {
   state.filters.push({ name: '', categories: [], _open: true });
   renderFiltersEditor();
-  setTimeout(() => document.querySelector(`#filter-row-${state.filters.length-1} input[type=text]`)?.focus(), 50);
+  setTimeout(() => {
+    const row = document.querySelector(`#filter-row-${state.filters.length-1} input[type=text]`);
+    if (row) row.focus();
+  }, 50);
 }
 async function saveFilters() {
   localStorage.setItem('budget_filters', JSON.stringify(state.filters));
   renderFilterBar();
-
   const btn = document.querySelector('[onclick="saveFilters()"]');
   await btnSave(btn, async () => {
-    if (state.sheetUrl) {
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(), 8000));
-      await Promise.race([sheetPost({ action: 'saveFilters', filters: state.filters }), timeout]);
-    }
+    if (state.connected) { await db.saveFilters(state.filters); }
   });
 }
 
-// ─── Utilities ───────────────────────────────────────────────────────
-// applyRules: walks the rules list and returns the first matching category,
-// '__delete__' if a delete rule matches, or null if nothing matches.
-function applyRules(description) {
-  if (!description || !state.rules.length) return null;
-  const lower = description.toLowerCase();
-  for (const rule of state.rules) {
-    if (rule.contains && lower.includes(rule.contains.toLowerCase())) {
-      return rule.action === 'delete' ? '__delete__' : rule.category;
-    }
-  }
-  return null;
-}
 
-// escHtml: sanitizes strings before inserting into innerHTML to prevent XSS.
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 // fmt: formats a number as a 2-decimal dollar amount string (no $ sign).
 function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
+// --- PWA Service Worker Registration ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 </script>
 
+</div><!-- /app-root -->
 </body>
-</html>
+</html> 
