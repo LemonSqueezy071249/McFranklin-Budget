@@ -1,6 +1,6 @@
 {
   "name": "McFranklin Budget",
-  "short_name": "Budget",
+  "short_name": "MF Budget",
   "description": "Family budget tracker",
   "start_url": "./",
   "display": "standalone",
