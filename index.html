@@ -98,6 +98,8 @@
   .cat-row { display: grid; grid-template-columns: 220px 1fr 90px 90px 90px; align-items: center; gap: 12px; padding: 9px 8px; border-radius: var(--radius-sm); transition: background 0.12s; }
   .cat-row:hover { background: var(--surface); }
   .cat-name { font-size: 14px; font-weight: 500; }
+  .cat-name-link { cursor: pointer; border-bottom: 1px dashed transparent; transition: all 0.15s; }
+  .cat-name-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .cat-name .sub { font-size: 11.5px; color: var(--muted); font-weight: 400; }
   .progress-bar { height: 5px; background: var(--bg); border-radius: 99px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s cubic-bezier(.4,0,.2,1); }
@@ -309,6 +311,31 @@
   .signin-btn img { width:20px; height:20px; }
   #app-root { display:none; }
 
+  /* Splash/loading screen — shown immediately, hides once auth resolves */
+  #splash-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px; z-index: 2000;
+    transition: opacity 0.3s ease;
+  }
+  #splash-screen.hiding { opacity: 0; pointer-events: none; }
+  #splash-screen .splash-icon { font-size: 3rem; }
+  #splash-screen h1 {
+    font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent) 0%, #9B59D0 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  #splash-screen .splash-spinner {
+    width: 20px; height: 20px;
+    border: 2px solid rgba(88,86,214,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: btn-spin 0.7s linear infinite;
+    margin-top: 4px;
+  }
+
   /* Dashboard sidebar (wide desktop only) */
   #dashboard-sidebar { display: none; }
   @media (min-width: 1100px) {
@@ -326,8 +353,15 @@
 </style>
 </head>
 <body>
-<!-- Sign-in screen (shown before auth) -->
-<div id="signin-screen">
+<!-- Splash screen: shown immediately on load, hidden once auth resolves -->
+<div id="splash-screen">
+  <div class="splash-icon">💰</div>
+  <h1>McFranklin Budget</h1>
+  <div class="splash-spinner"></div>
+</div>
+
+<!-- Sign-in screen (shown only when not authenticated) -->
+<div id="signin-screen" style="display:none;">
   <div style="font-size:2.5rem;">💰</div>
   <h1>McFranklin Budget</h1>
   <p>Sign in with your Google account to access the family budget.</p>
@@ -385,6 +419,7 @@
   </div>
 
   <div id="tab-expenses" class="panel">
+    <div id="exp-breadcrumb" style="display:none; align-items:center; margin-bottom:10px; padding:8px 12px; background:var(--accent-light); border-radius:var(--radius-sm);"></div>
     <div style="margin-bottom:1.25rem;">
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;" class="exp-count-search">
         <div class="period-toggle" id="exp-period-toggle" style="flex:1; min-width:0;">
@@ -747,6 +782,15 @@ function signOut() {
 }
 
 // --- Bootstrap ---
+// Fades and removes the splash screen after auth resolves.
+// Called whether the user is signed in or not — the splash always hides.
+function hideSplash() {
+  const splash = document.getElementById('splash-screen');
+  if (!splash) return;
+  splash.classList.add('hiding');
+  setTimeout(() => { splash.style.display = 'none'; }, 320);
+}
+
 function initFirebase() {
   fbApp  = firebase.initializeApp(FIREBASE_CONFIG);
   fbAuth = firebase.auth();
@@ -760,7 +804,8 @@ function initFirebase() {
     const banner  = document.getElementById('config-banner');
 
     if (!user) {
-      // Not signed in
+      // Not signed in — hide splash, show sign-in screen
+      hideSplash();
       signinScreen.style.display = 'flex';
       appRoot.style.display = 'none';
       state.connected = false;
@@ -770,27 +815,24 @@ function initFirebase() {
 
     // Check email is on the allow-list
     if (!ALLOWED_EMAILS.includes(user.email)) {
+      hideSplash();
       fbAuth.signOut();
       alert('Access denied. Only ' + ALLOWED_EMAILS.join(' and ') + ' can use this app.');
       return;
     }
 
-    // Signed in and authorized
+    // Signed in and authorized — load data then hide splash
     signinScreen.style.display = 'none';
-    appRoot.style.display = 'block';
     if (banner) banner.style.display = 'none';
 
-    // Update Settings account panel
     const nameEl  = document.getElementById('settings-user-name');
     const emailEl = document.getElementById('settings-user-email');
     if (nameEl)  nameEl.textContent  = user.displayName || 'Signed in';
     if (emailEl) emailEl.textContent = user.email;
 
-    // Update connection indicator
     state.connected = true;
     setConnStatus(true);
 
-    // Load data, set up real-time listener, render
     try {
       await db.loadAll();
     } catch(e) {
@@ -798,6 +840,10 @@ function initFirebase() {
     }
     db.listenForChanges();
     initApp();
+
+    // Show app and fade splash only after data is loaded — no flash
+    appRoot.style.display = 'block';
+    hideSplash();
   });
 }
 
@@ -998,6 +1044,10 @@ function getExpFilteredExpenses() {
     if (state.expFilter === '__uncategorized__') {
       return !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
     }
+    if (state.expFilter && state.expFilter.startsWith('__category__:')) {
+      const cat = state.expFilter.slice('__category__:'.length);
+      return e.category === cat;
+    }
     if (state.expFilter) {
       const f = state.filters.find(f => f.name === state.expFilter);
       if (f && !f.categories.includes(e.category)) return false;
@@ -1130,7 +1180,10 @@ function renderDashboard() {
       }
 
       html += `<div class="cat-row">
-        <div class="cat-name">${c.name}<div class="sub">${c.period}</div>${ytdHtml}</div>
+        <div class="cat-name">
+          <span class="cat-name-link" onclick="drillDownToCategory('${escHtml(c.name)}')" title="View transactions">${escHtml(c.name)}</span>
+          <div class="sub">${c.period}</div>${ytdHtml}
+        </div>
         <div class="progress-wrap">
           <div class="progress-bar"><div class="progress-fill ${cls}" style="width:${barPct}%"></div></div>
           <div class="progress-pct" style="${pct > 100 ? 'color:var(--danger);font-weight:700;' : ''}">${Math.round(pct)}%</div>
@@ -1215,7 +1268,59 @@ function renderDashboardSidebar(filtered, visibleCats) {
     </div>`;
 }
 
-// --- Transaction Table -----------------------------------------------
+// Drill down from a dashboard category into the Transactions tab,
+// carrying over the current period and filtering to that category.
+function drillDownToCategory(catName) {
+  // Mirror dashboard period to transactions tab
+  state.expPeriod = state.viewPeriod;
+  state.expMonth  = state.viewMonth;
+  state.expYear   = state.viewYear;
+
+  // Set a special single-category filter
+  state.expFilter = '__category__:' + catName;
+  state._drillCategory = catName;
+
+  // Switch to Transactions tab
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-expenses').classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.trim() === 'Transactions') t.classList.add('active');
+  });
+
+  // Sync the period toggle buttons in the transactions tab
+  document.querySelectorAll('#exp-period-toggle .toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim().toLowerCase().replace(' ', '') === ({
+      monthly: 'thismonth', lastmonth: 'lastmonth', ytd: 'yeartodate',
+      yearly: 'fullyear', all: 'all', custom: 'custom'
+    }[state.expPeriod] || ''));
+  });
+
+  // Show a "back" breadcrumb at the top of the transactions tab
+  const breadcrumb = document.getElementById('exp-breadcrumb');
+  if (breadcrumb) {
+    breadcrumb.style.display = 'flex';
+    breadcrumb.innerHTML = `<span style="font-size:13px;color:var(--muted);">Dashboard</span>
+      <span style="font-size:13px;color:var(--muted);margin:0 6px;">›</span>
+      <span style="font-size:13px;font-weight:600;color:var(--text);">${escHtml(catName)}</span>
+      <button onclick="clearDrillDown()" style="margin-left:10px;font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--sans);">✕ Clear filter</button>`;
+  }
+
+  renderExpenseTable();
+}
+
+function clearDrillDown() {
+  state.expFilter = null;
+  state._drillCategory = null;
+  const breadcrumb = document.getElementById('exp-breadcrumb');
+  if (breadcrumb) breadcrumb.style.display = 'none';
+  // Reset exp filter chips
+  document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
+    .forEach(b => b.classList.remove('active'));
+  const allBtn = document.getElementById('exp-filter-all');
+  if (allBtn) allBtn.classList.add('active');
+  renderExpenseTable();
+}
 // Renders the full transaction list respecting the active period, category
 // filter, and search query. Each row gets Edit (✎), Split (⇌), and Delete (✕)
 // buttons with hidden inline editor rows that open beneath each transaction.
