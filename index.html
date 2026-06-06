@@ -353,6 +353,19 @@
 </style>
 </head>
 <body>
+<!-- PWA install banner — shown on mobile when app is installable -->
+<div id="pwa-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:999;
+  background:var(--surface); border-top:1px solid var(--border); padding:14px 20px;
+  box-shadow:0 -4px 20px rgba(0,0,0,0.12); display:none; align-items:center; gap:12px;">
+  <div style="font-size:1.8rem; flex-shrink:0;">💰</div>
+  <div style="flex:1; min-width:0;">
+    <div style="font-size:14px; font-weight:600; color:var(--text);">Add to Home Screen</div>
+    <div style="font-size:12px; color:var(--muted);">Install McFranklin Budget for quick access</div>
+  </div>
+  <button id="pwa-install-btn" class="btn btn-primary" style="font-size:13px; padding:8px 16px; flex-shrink:0;">Install</button>
+  <button onclick="dismissPWABanner()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;padding:4px;flex-shrink:0;">✕</button>
+</div>
+
 <!-- Splash screen: shown immediately on load, hidden once auth resolves -->
 <div id="splash-screen">
   <div class="splash-icon">💰</div>
@@ -534,6 +547,48 @@
 
   <div id="tab-settings" class="panel">
     <div class="settings-section">
+      <h2>My Preferences</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1.25rem;">These are saved on this device only — perfect for setting up each person's phone with the view they care about most.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+        <div class="form-group">
+          <label class="field-label">Default dashboard period</label>
+          <select id="pref-period">
+            <option value="monthly">This month</option>
+            <option value="lastmonth">Last month</option>
+            <option value="ytd">Year to date</option>
+            <option value="yearly">Full year</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Default dashboard filter</label>
+          <select id="pref-filter">
+            <option value="">All categories</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Default transactions period</label>
+          <select id="pref-exp-period">
+            <option value="monthly">This month</option>
+            <option value="lastmonth">Last month</option>
+            <option value="ytd">Year to date</option>
+            <option value="yearly">Full year</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Default transactions filter</label>
+          <select id="pref-exp-filter">
+            <option value="">All categories</option>
+            <option value="__uncategorized__">Uncategorized</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:1rem;">
+        <button class="btn btn-primary" onclick="saveUserPrefs()">Save preferences</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <h2>Dashboard Filters</h2>
       <p class="text-sm text-muted" style="margin-bottom:1rem;">Create named filters that show only specific categories on the dashboard. The "All" filter is always available automatically.</p>
       <div id="filters-editor"></div>
@@ -553,7 +608,7 @@
         <button class="btn btn-secondary" style="font-size:13px;" onclick="signOut()">Sign out</button>
       </div>
       <div style="margin-top:1rem; padding:10px 14px; background:var(--accent-light); border-radius:var(--radius-sm); font-size:13px; color:var(--accent);">
-        ✓ Data syncs to Firestore in real time. Both Jeff and Michelle share the same budget automatically.
+        Data syncs to Firestore in real time. Both Jeff and Michelle share the same budget automatically.
       </div>
     </div>
   </div>
@@ -896,6 +951,7 @@ async function btnSave(btn, work, { successLabel = 'Saved', errorLabel = 'Try ag
 // Firebase auth state drives everything. When signed in, load data and show app.
 // initFirebase() is called by the Firebase block above after SDK setup.
 function initApp() {
+  loadUserPrefs();
   setTodayDate();
   populateCategorySelect();
   populateMonthPicker();
@@ -906,6 +962,7 @@ function initApp() {
   renderBudgetEditor();
   renderRulesEditor();
   renderFiltersEditor();
+  populatePrefsUI();
   updatePeriodLabel();
 }
 
@@ -1270,17 +1327,71 @@ function renderDashboardSidebar(filtered, visibleCats) {
 
 // Drill down from a dashboard category into the Transactions tab,
 // carrying over the current period and filtering to that category.
+// --- User Preferences (per-device, localStorage) ---
+// Stored locally so each person's phone has independent defaults.
+// Keys include the user's email so two accounts on same device don't conflict.
+function prefsKey(key) {
+  const email = (fbAuth && fbAuth.currentUser) ? fbAuth.currentUser.email : 'default';
+  return 'prefs_' + email + '_' + key;
+}
+
+function loadUserPrefs() {
+  const period = localStorage.getItem(prefsKey('dashPeriod'));
+  if (period) state.viewPeriod = period;
+  const filter = localStorage.getItem(prefsKey('dashFilter'));
+  if (filter !== null) state.activeFilter = filter || null;
+  const expPeriod = localStorage.getItem(prefsKey('expPeriod'));
+  if (expPeriod) state.expPeriod = expPeriod;
+  const expFilter = localStorage.getItem(prefsKey('expFilter'));
+  if (expFilter !== null) state.expFilter = expFilter || null;
+}
+
+function populatePrefsUI() {
+  const filterOptions = state.filters.map(f =>
+    `<option value="${escHtml(f.name)}">${escHtml(f.name)}</option>`
+  ).join('');
+  const filterEl    = document.getElementById('pref-filter');
+  const expFilterEl = document.getElementById('pref-exp-filter');
+  if (filterEl)    filterEl.innerHTML    = `<option value="">All categories</option>${filterOptions}`;
+  if (expFilterEl) expFilterEl.innerHTML = `<option value="">All categories</option><option value="__uncategorized__">Uncategorized</option>${filterOptions}`;
+
+  const set = (id, key, def) => { const el = document.getElementById(id); if (el) el.value = localStorage.getItem(prefsKey(key)) || def; };
+  set('pref-period',     'dashPeriod', 'monthly');
+  set('pref-filter',     'dashFilter', '');
+  set('pref-exp-period', 'expPeriod',  'monthly');
+  set('pref-exp-filter', 'expFilter',  '');
+}
+
+function saveUserPrefs() {
+  const get = id => document.getElementById(id)?.value || '';
+  const period    = get('pref-period')     || 'monthly';
+  const filter    = get('pref-filter');
+  const expPeriod = get('pref-exp-period') || 'monthly';
+  const expFilter = get('pref-exp-filter');
+
+  localStorage.setItem(prefsKey('dashPeriod'),  period);
+  localStorage.setItem(prefsKey('dashFilter'),  filter);
+  localStorage.setItem(prefsKey('expPeriod'),   expPeriod);
+  localStorage.setItem(prefsKey('expFilter'),   expFilter);
+
+  state.viewPeriod   = period;
+  state.activeFilter = filter || null;
+  state.expPeriod    = expPeriod;
+  state.expFilter    = expFilter || null;
+
+  renderDashboard(); renderExpenseTable(); updatePeriodLabel();
+  const btn = document.querySelector('[onclick="saveUserPrefs()"]');
+  if (btn) btnSave(btn, async () => {}, { successLabel: 'Saved', resetMs: 1800 });
+}
+
+// --- Drill-down: Dashboard category → Transactions ---
 function drillDownToCategory(catName) {
-  // Mirror dashboard period to transactions tab
   state.expPeriod = state.viewPeriod;
   state.expMonth  = state.viewMonth;
   state.expYear   = state.viewYear;
-
-  // Set a special single-category filter
   state.expFilter = '__category__:' + catName;
   state._drillCategory = catName;
 
-  // Switch to Transactions tab
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-expenses').classList.add('active');
@@ -1288,25 +1399,51 @@ function drillDownToCategory(catName) {
     if (t.textContent.trim() === 'Transactions') t.classList.add('active');
   });
 
-  // Sync the period toggle buttons in the transactions tab
+  const periodLabels = { monthly:'This month', lastmonth:'Last month', ytd:'Year to date', yearly:'Full year', all:'All', custom:'Custom' };
   document.querySelectorAll('#exp-period-toggle .toggle-btn').forEach(b => {
-    b.classList.toggle('active', b.textContent.trim().toLowerCase().replace(' ', '') === ({
-      monthly: 'thismonth', lastmonth: 'lastmonth', ytd: 'yeartodate',
-      yearly: 'fullyear', all: 'all', custom: 'custom'
-    }[state.expPeriod] || ''));
+    b.classList.toggle('active', b.textContent.trim() === (periodLabels[state.expPeriod] || ''));
   });
 
-  // Show a "back" breadcrumb at the top of the transactions tab
   const breadcrumb = document.getElementById('exp-breadcrumb');
   if (breadcrumb) {
     breadcrumb.style.display = 'flex';
-    breadcrumb.innerHTML = `<span style="font-size:13px;color:var(--muted);">Dashboard</span>
-      <span style="font-size:13px;color:var(--muted);margin:0 6px;">›</span>
+    breadcrumb.innerHTML = `
+      <button onclick="returnToBudget('${escHtml(catName)}')"
+        style="background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--accent);padding:0;font-weight:500;">
+        ← Budget
+      </button>
+      <span style="font-size:13px;color:var(--muted);margin:0 8px;">›</span>
       <span style="font-size:13px;font-weight:600;color:var(--text);">${escHtml(catName)}</span>
-      <button onclick="clearDrillDown()" style="margin-left:10px;font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--sans);">✕ Clear filter</button>`;
+      <button onclick="clearDrillDown()"
+        style="margin-left:auto;font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:var(--sans);">
+        Clear filter
+      </button>`;
   }
-
   renderExpenseTable();
+}
+
+// Navigate back to the Budget tab and scroll/highlight the category row
+function returnToBudget(catName) {
+  clearDrillDown();
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-budget').classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.trim() === 'Budget') t.classList.add('active');
+  });
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.budget-item-row input[type=text]');
+    for (const inp of inputs) {
+      if (inp.value === catName) {
+        const row = inp.closest('.budget-item-row');
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.style.transition = 'background 0.15s';
+        row.style.background = 'var(--accent-light)';
+        setTimeout(() => { row.style.background = ''; }, 1800);
+        break;
+      }
+    }
+  }, 80);
 }
 
 function clearDrillDown() {
@@ -1314,13 +1451,47 @@ function clearDrillDown() {
   state._drillCategory = null;
   const breadcrumb = document.getElementById('exp-breadcrumb');
   if (breadcrumb) breadcrumb.style.display = 'none';
-  // Reset exp filter chips
   document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
     .forEach(b => b.classList.remove('active'));
   const allBtn = document.getElementById('exp-filter-all');
   if (allBtn) allBtn.classList.add('active');
   renderExpenseTable();
 }
+
+// --- PWA Install Banner ---
+let pwaInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  pwaInstallPrompt = e;
+  // Show banner only on mobile, only if not dismissed before
+  if (!localStorage.getItem('pwa_banner_dismissed') && /Mobi|Android/i.test(navigator.userAgent)) {
+    const banner = document.getElementById('pwa-banner');
+    if (banner) banner.style.display = 'flex';
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!pwaInstallPrompt) return;
+      pwaInstallPrompt.prompt();
+      const { outcome } = await pwaInstallPrompt.userChoice;
+      pwaInstallPrompt = null;
+      dismissPWABanner();
+    });
+  }
+});
+
+window.addEventListener('appinstalled', () => dismissPWABanner());
+
+function dismissPWABanner() {
+  const banner = document.getElementById('pwa-banner');
+  if (banner) banner.style.display = 'none';
+  localStorage.setItem('pwa_banner_dismissed', '1');
+}
+
 // Renders the full transaction list respecting the active period, category
 // filter, and search query. Each row gets Edit (✎), Split (⇌), and Delete (✕)
 // buttons with hidden inline editor rows that open beneath each transaction.
@@ -2244,6 +2415,7 @@ function addFilterRow() {
 async function saveFilters() {
   localStorage.setItem('budget_filters', JSON.stringify(state.filters));
   renderFilterBar();
+  populatePrefsUI();
   const btn = document.querySelector('[onclick="saveFilters()"]');
   await btnSave(btn, async () => {
     if (state.connected) { await db.saveFilters(state.filters); }
