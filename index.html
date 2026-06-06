@@ -1410,7 +1410,7 @@ function drillDownToCategory(catName) {
     breadcrumb.innerHTML = `
       <button onclick="returnToBudget('${escHtml(catName)}')"
         style="background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--accent);padding:0;font-weight:500;">
-        ← Budget
+        ← Dashboard
       </button>
       <span style="font-size:13px;color:var(--muted);margin:0 8px;">›</span>
       <span style="font-size:13px;font-weight:600;color:var(--text);">${escHtml(catName)}</span>
@@ -1422,21 +1422,22 @@ function drillDownToCategory(catName) {
   renderExpenseTable();
 }
 
-// Navigate back to the Budget tab and scroll/highlight the category row
+// Navigate back to the Dashboard and scroll/highlight the category row there
 function returnToBudget(catName) {
   clearDrillDown();
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-budget').classList.add('active');
+  document.getElementById('tab-dashboard').classList.add('active');
   document.querySelectorAll('.tab').forEach(t => {
-    if (t.textContent.trim() === 'Budget') t.classList.add('active');
+    if (t.textContent.trim() === 'Dashboard') t.classList.add('active');
   });
   setTimeout(() => {
-    const inputs = document.querySelectorAll('.budget-item-row input[type=text]');
-    for (const inp of inputs) {
-      if (inp.value === catName) {
-        const row = inp.closest('.budget-item-row');
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Find the cat-name-link in the dashboard that matches this category
+    const links = document.querySelectorAll('.cat-name-link');
+    for (const link of links) {
+      if (link.textContent.trim() === catName) {
+        link.closest('.cat-row').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const row = link.closest('.cat-row');
         row.style.transition = 'background 0.15s';
         row.style.background = 'var(--accent-light)';
         setTimeout(() => { row.style.background = ''; }, 1800);
