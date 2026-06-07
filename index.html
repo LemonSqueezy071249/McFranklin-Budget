@@ -1845,18 +1845,20 @@ async function saveEdit(idx) {
     return;
   }
 
+  // Update state immediately so the re-render reflects the change right away
   state.expenses[idx] = { ...state.expenses[idx], date, amount, category, who, description, memo };
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
 
-  if (btn) {
-    await btnSave(btn, async () => {
-      if (state.connected) { await db.saveExpenses(state.expenses); }
-    });
-  }
-  }
+  // Close the edit row and re-render instantly — don't wait for Firestore
+  closeEdit(idx);
   renderExpenseTable();
   renderDashboard();
-  closeEdit(idx);
+
+  // Sync to Firestore in the background
+  if (state.connected) {
+    db.saveExpenses(state.expenses).catch(e => console.warn('Sync failed', e));
+  }
+}
 
 // --- Rules -----------------------------------------------------------
 // Rules are plain text match strings. During CSV import, each transaction
