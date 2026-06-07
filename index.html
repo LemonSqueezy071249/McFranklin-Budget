@@ -233,7 +233,9 @@
   .add-group-btn { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 13px; text-align: center; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); background: none; width: 100%; font-family: var(--sans); transition: all 0.15s; margin-bottom: 1rem; }
   .add-group-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
   .budget-edit-row { display: grid; grid-template-columns: 1fr 130px 130px 40px; gap: 10px; align-items: center; margin-bottom: 8px; }
-  /* ── Mobile ── */
+  /* Transaction table — desktop: standard table, mobile: cards */
+  .exp-card-main, .exp-card-meta, .exp-card-actions { display: none; }
+  .desktop-only { display: table-cell; }
   @media (max-width: 640px) {
     .app { padding: 1rem 1rem 5rem; }
     header { padding: 0.9rem 1.1rem; flex-wrap: wrap; gap: 6px; }
@@ -285,16 +287,12 @@
     /* Transaction table → card list on mobile */
     .expense-table thead { display: none; }
     .expense-table, .expense-table tbody { display: block; }
-    .expense-table tr.expense-data-row { display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius); margin-bottom: 8px; box-shadow: var(--shadow-sm); padding: 0; overflow: hidden; border-bottom: none !important; }
-    .expense-table tr.expense-data-row td { border-bottom: none !important; padding: 0; display: block; }
+    .expense-table tr.expense-data-row { display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius); margin-bottom: 8px; box-shadow: var(--shadow-sm); overflow: hidden; }
+    .expense-table tr.expense-data-row td { border-bottom: none !important; }
+    .desktop-only { display: none !important; }
     .expense-table tr.expense-data-row td.exp-card-main { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 12px 6px; gap: 8px; }
     .expense-table tr.expense-data-row td.exp-card-meta { display: flex; align-items: center; gap: 8px; padding: 0 12px 10px; flex-wrap: wrap; }
-    .expense-table tr.expense-data-row td.exp-card-actions { display: flex; justify-content: flex-end; gap: 4px; padding: 0 8px 8px; border-top: 1px solid var(--border); padding-top: 6px; }
-    /* Hide unused td cells in card mode */
-    .expense-table tr.expense-data-row td.exp-hide-mobile { display: none; }
-    /* Edit and split rows stay as full-width blocks */
-    .expense-table tr.edit-expand-row td,
-    .expense-table tr.split-expand-row td { display: block; }
+    .expense-table tr.expense-data-row td.exp-card-actions { display: flex; justify-content: flex-end; gap: 4px; padding: 6px 8px 8px; border-top: 1px solid var(--border); }
     /* Show date inside card meta on mobile */
     .expense-table tr.expense-data-row td.exp-card-meta [id^="mobile-date-"] { display: inline !important; }
 
@@ -1572,28 +1570,39 @@ function renderExpenseTable() {
         <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px;padding:2px 7px;">⇌</button>
         <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>`;
 
-    // Each data row gets class="expense-data-row" so mobile CSS can restyle as cards.
-    // Desktop: all cells visible in table layout.
-    // Mobile: cells rearranged into card sections via CSS classes.
+    // Desktop: standard table columns (date, description, memo, category, who, amount, actions)
+    // Mobile: exp-card-* cells shown as card sections, desktop-only cells hidden
     html += `<tr id="exp-row-${idx}" class="expense-data-row" style="${isSplit ? 'opacity:.82;' : ''}">
-      <td class="date-col">${e.date||''}</td>
-      <td class="exp-card-main">
+      <td class="date-col desktop-only">${e.date||''}</td>
+      <td class="desktop-only">${escHtml(e.description||'')}${isSplit ? ' <span style="font-size:11px;color:var(--muted);">(split)</span>' : ''}</td>
+      <td class="desktop-only text-muted" style="font-size:13px;">${escHtml(e.memo||'')}</td>
+      <td class="desktop-only">${catBadge}</td>
+      <td class="desktop-only text-muted">${escHtml(e.who||'')}</td>
+      <td class="desktop-only" style="text-align:right;font-weight:600;${amtColor};white-space:nowrap;">${amtDisplay}</td>
+      <td class="desktop-only" style="white-space:nowrap;">
+        <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center;">
+          <button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
+          <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px;padding:2px 7px;">⇌</button>
+          <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>
+        </div>
+      </td>
+      <td class="exp-card-main" colspan="7">
         <div>
-          <div style="font-size:14px; font-weight:500;">${escHtml(e.description||'')}${isSplit ? ' <span style="font-size:11px;color:var(--muted);">(split)</span>' : ''}</div>
+          <div style="font-size:14px;font-weight:500;">${escHtml(e.description||'')}${isSplit ? ' <span style="font-size:11px;color:var(--muted);">(split)</span>' : ''}</div>
           ${e.memo ? `<div style="font-size:12px;color:var(--muted);margin-top:1px;">${escHtml(e.memo)}</div>` : ''}
         </div>
-        <div style="text-align:right; font-weight:600; white-space:nowrap; ${amtColor}">${amtDisplay}</div>
+        <div style="text-align:right;font-weight:600;white-space:nowrap;${amtColor}">${amtDisplay}</div>
       </td>
       <td class="exp-card-meta">
         ${catBadge}
         <span style="font-size:12px;color:var(--muted);">${escHtml(e.who||'')}</span>
-        <span class="date-col" style="font-size:12px;color:var(--muted);display:none;" id="mobile-date-${idx}">${e.date||''}</span>
+        <span style="font-size:12px;color:var(--muted);">${e.date||''}</span>
       </td>
       <td class="exp-card-actions">
-        ${actions}
+        <button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
+        <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px;padding:2px 7px;">⇌</button>
+        <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>
       </td>
-      <td class="exp-hide-mobile" style="text-align:right;font-weight:600;${amtColor};white-space:nowrap;">${amtDisplay}</td>
-      <td class="exp-hide-mobile text-muted">${escHtml(e.memo||'')}</td>
     </tr>
     <tr id="edit-row-${idx}" class="edit-expand-row" style="display:none;">
       <td colspan="7" class="edit-row-container" style="padding:0;"></td>
