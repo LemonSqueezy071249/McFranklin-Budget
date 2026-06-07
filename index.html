@@ -2089,26 +2089,27 @@ function showCSVMapper() {
   ids.forEach((id, i) => {
     html += `<div>
       <label class="field-label" style="font-size:11px;">${fields[i]}</label>
-      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+      <select id="${id}" style="font-size:13px; padding:6px 8px; margin-top:4px;" onchange="updateCSVPreview()">
         ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
       </select>
     </div>`;
   });
   html += `<div>
     <label class="field-label" style="font-size:11px;">Credit / refund column <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">- optional</span></label>
-    <select id="csv-credit-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+    <select id="csv-credit-col" style="font-size:13px; padding:6px 8px; margin-top:4px;" onchange="updateCSVPreview()">
       <option value="-1">None</option>
       ${state.csvHeaders.map((h,j) => `<option value="${j}">${escHtml(h)}</option>`).join('')}
     </select>
   </div>`;
   html += `<div class="csv-map-full">
     <label class="field-label" style="font-size:11px;">Fallback category</label>
-    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;">
+    <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;" onchange="updateCSVPreview()">
       <option value="Uncategorized" selected>Uncategorized (recommended)</option>
       ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
     </select>
   </div>`;
   document.getElementById('csv-map-grid').innerHTML = html;
+
   const lower = state.csvHeaders.map(h => h.toLowerCase());
   const guess = (words) => { const i = lower.findIndex(h => words.some(w => h.includes(w))); return i >= 0 ? i : 0; };
   document.getElementById('csv-date-col').value   = guess(['date','time']);
@@ -2116,12 +2117,68 @@ function showCSVMapper() {
   document.getElementById('csv-desc-col').value   = guess(['desc','memo','narr','payee','merchant','name']);
   const creditIdx = lower.findIndex(h => ['credit','refund','payment','deposit'].some(w => h.includes(w)));
   if (creditIdx >= 0) document.getElementById('csv-credit-col').value = creditIdx;
+
+  updateCSVPreview();
+}
+
+// Re-renders the preview table with a live "Will be categorized as" column.
+// Called on initial render and whenever a column dropdown changes.
+function updateCSVPreview() {
+  const dci = parseInt(document.getElementById('csv-desc-col')?.value ?? 0);
+  const ai  = parseInt(document.getElementById('csv-amount-col')?.value ?? 0);
+  const ci  = parseInt(document.getElementById('csv-credit-col')?.value ?? -1);
+  const fallback = document.getElementById('csv-cat-col')?.value || 'Uncategorized';
+
+  let autoCount = 0, deleteCount = 0, uncatCount = 0;
+
   const rowCount = state.csvRows.length;
   document.getElementById('csv-row-count').textContent = `${rowCount} transaction${rowCount!==1?'s':''} found`;
-  let t = `<table class="expense-table" style="font-size:12px;"><thead><tr>${state.csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
-  state.csvRows.forEach(r => { t += `<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}</tr>`; });
+
+  let t = `<table class="expense-table" style="font-size:12px;">
+    <thead><tr>
+      ${state.csvHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}
+      <th style="white-space:nowrap; color:var(--accent);">Will import as</th>
+    </tr></thead><tbody>`;
+
+  state.csvRows.forEach(r => {
+    const desc = r[dci] || '';
+    const rawAmt = (r[ai]||'').replace(/[$,()]/g,'').trim();
+    let amount = parseFloat(rawAmt);
+    // Check credit column
+    if (ci >= 0 && r[ci]) {
+      const credit = parseFloat((r[ci]||'').replace(/[$,()]/g,'').trim());
+      if (!isNaN(credit) && credit !== 0) amount = -Math.abs(credit);
+    }
+    const skip = isNaN(amount) || amount === 0;
+
+    let categoryCell;
+    if (skip) {
+      categoryCell = `<td style="color:var(--muted);font-style:italic;">skipped (no amount)</td>`;
+    } else {
+      const match = applyRules(desc);
+      if (match === '__delete__') {
+        deleteCount++;
+        categoryCell = `<td><span style="background:var(--danger-light);color:var(--danger);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;">🗑 Delete</span></td>`;
+      } else if (match) {
+        autoCount++;
+        categoryCell = `<td><span class="badge">${escHtml(match)}</span> <span style="font-size:10px;color:var(--accent);font-weight:600;">rule</span></td>`;
+      } else {
+        uncatCount++;
+        categoryCell = `<td><span style="background:var(--warn-light);color:var(--warn);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;">${escHtml(fallback)}</span></td>`;
+      }
+    }
+    t += `<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}${categoryCell}</tr>`;
+  });
   t += '</tbody></table>';
   document.getElementById('csv-preview-table').innerHTML = t;
+
+  // Update row count with categorization summary
+  const parts = [];
+  if (autoCount)   parts.push(`${autoCount} auto-categorized`);
+  if (deleteCount) parts.push(`${deleteCount} will be deleted`);
+  if (uncatCount)  parts.push(`${uncatCount} → ${fallback}`);
+  const summary = parts.length ? ` · ${parts.join(', ')}` : '';
+  document.getElementById('csv-row-count').textContent = `${rowCount} transaction${rowCount!==1?'s':''}${summary}`;
 }
 
 async function importCSV() {
