@@ -414,7 +414,7 @@
     <div id="dashboard-controls">
       <div class="period-toggle">
         <label>View:</label>
-        <button class="toggle-btn active" onclick="setPeriod('monthly')">This month</button>
+        <button class="toggle-btn" onclick="setPeriod('monthly')">This month</button>
         <button class="toggle-btn" onclick="setPeriod('lastmonth')">Last month</button>
         <button class="toggle-btn" onclick="setPeriod('ytd')">Year to date</button>
         <button class="toggle-btn" onclick="setPeriod('yearly')">Full year</button>
@@ -435,7 +435,7 @@
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;" class="exp-count-search">
         <div class="period-toggle" id="exp-period-toggle" style="flex:1; min-width:0;">
           <label>Period:</label>
-          <button class="toggle-btn active" onclick="setExpPeriod('monthly',event)">This month</button>
+          <button class="toggle-btn" onclick="setExpPeriod('monthly',event)">This month</button>
           <button class="toggle-btn" onclick="setExpPeriod('lastmonth',event)">Last month</button>
           <button class="toggle-btn" onclick="setExpPeriod('ytd',event)">Year to date</button>
           <button class="toggle-btn" onclick="setExpPeriod('yearly',event)">Full year</button>
@@ -962,6 +962,7 @@ function initApp() {
   renderFiltersEditor();
   populatePrefsUI();
   updatePeriodLabel();
+  syncPeriodButtons();
 }
 
 function setTodayDate() {
@@ -1342,6 +1343,25 @@ function loadUserPrefs() {
   if (expPeriod) state.expPeriod = expPeriod;
   const expFilter = localStorage.getItem(prefsKey('expFilter'));
   if (expFilter !== null) state.expFilter = expFilter || null;
+  // Sync button highlight states to match loaded prefs
+  syncPeriodButtons();
+}
+
+// Maps period keys to their button label text so we can highlight the right one
+function syncPeriodButtons() {
+  const periodLabels = {
+    monthly: 'This month', lastmonth: 'Last month',
+    ytd: 'Year to date', yearly: 'Full year',
+    all: 'All', custom: 'Custom'
+  };
+  // Dashboard period buttons
+  document.querySelectorAll('#dashboard-controls .toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === (periodLabels[state.viewPeriod] || ''));
+  });
+  // Transactions period buttons
+  document.querySelectorAll('#exp-period-toggle .toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === (periodLabels[state.expPeriod] || ''));
+  });
 }
 
 function populatePrefsUI() {
