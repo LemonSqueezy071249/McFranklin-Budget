@@ -874,7 +874,7 @@ function initFirebase() {
       return;
     }
 
-    // Signed in and authorized — load data then hide splash
+    // Signed in and authorized
     signinScreen.style.display = 'none';
     if (banner) banner.style.display = 'none';
 
@@ -886,17 +886,23 @@ function initFirebase() {
     state.connected = true;
     setConnStatus(true);
 
-    try {
-      await db.loadAll();
-    } catch(e) {
-      console.error('Failed to load data', e);
-    }
-    db.listenForChanges();
-    initApp();
-
-    // Show app and fade splash only after data is loaded — no flash
+    // Show app immediately from localStorage cache — don't wait for Firestore
     appRoot.style.display = 'block';
+    initApp();
     hideSplash();
+
+    // Then sync from Firestore in the background
+    db.loadAll().then(() => {
+      renderDashboard();
+      renderExpenseTable();
+      renderBudgetEditor();
+      renderRulesEditor();
+      renderFiltersEditor();
+      populateCategorySelect();
+      populatePrefsUI();
+    }).catch(e => console.error('Failed to load data', e));
+
+    db.listenForChanges();
   });
 }
 
@@ -1014,7 +1020,7 @@ function updatePeriodLabel() {
     state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear();
     label = months[now.getMonth()] + ' ' + now.getFullYear();
   } else if (state.viewPeriod === 'lastmonth') {
-    label = months[last.getMonth()] + ' ' + last.getFullYear();
+    label = 'Last month (' + months[last.getMonth()] + ' ' + last.getFullYear() + ')';
   } else if (state.viewPeriod === 'yearly') {
     label = 'Full year ' + now.getFullYear();
   } else if (state.viewPeriod === 'ytd') {
