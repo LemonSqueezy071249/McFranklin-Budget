@@ -1982,7 +1982,7 @@ async function saveRules() {
 
   const btn = document.querySelector('[onclick="saveRules()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await db.saveRules(state.rules); }
+    if (state.connected) { await Promise.race([db.saveRules(state.rules), new Promise((_,r)=>setTimeout(r,6000))]); }
   });
 
   // After saving, check if any existing transactions are uncategorized and a
@@ -2032,7 +2032,7 @@ async function applyRulesToUncategorized() {
   const btn = document.querySelector('#rules-apply-prompt .btn-primary');
   if (btn) {
     await btnSave(btn, async () => {
-      if (state.connected) { await db.saveExpenses(state.expenses); }
+      if (state.connected) { await Promise.race([db.saveExpenses(state.expenses), new Promise((_,r)=>setTimeout(r,6000))]); }
     });
   }
 }
@@ -2081,7 +2081,7 @@ async function addExpense() {
   clearForm();
 
   await btnSave(btn, async () => {
-    if (state.connected) { await db.saveExpenses(state.expenses); }
+    if (state.connected) { await Promise.race([db.saveExpenses(state.expenses), new Promise((_,r)=>setTimeout(r,6000))]); }
   }, { successLabel: 'Saved', resetMs: 1800 });
 }
 
@@ -2454,7 +2454,7 @@ async function saveBudgets() {
   renderDashboard();
   const btn = document.querySelector('[onclick="saveBudgets()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await db.saveBudgets(state.categories, state.groupOrder); }
+    if (state.connected) { await Promise.race([db.saveBudgets(state.categories, state.groupOrder), new Promise((_,r)=>setTimeout(r,6000))]); }
   });
 }
 
@@ -2523,7 +2523,7 @@ async function saveFilters() {
   populatePrefsUI();
   const btn = document.querySelector('[onclick="saveFilters()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await db.saveFilters(state.filters); }
+    if (state.connected) { await Promise.race([db.saveFilters(state.filters), new Promise((_,r)=>setTimeout(r,6000))]); }
   });
 }
 
