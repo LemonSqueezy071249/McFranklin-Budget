@@ -713,7 +713,7 @@ let state = {
 // --- Firebase + Firestore Backend ---
 // Replaces the Google Sheets backend entirely.
 // Two authorized users share a single budget document path in Firestore:
-//   /budgets/nectra/{expenses, categories, groupOrder, rules, filters}
+//   /budgets/mcfranklin/{expenses, categories, groupOrder, rules, filters}
 // Auth is Google Sign-In - only the two registered emails can access data.
 
 const FIREBASE_CONFIG = {
@@ -726,7 +726,7 @@ const FIREBASE_CONFIG = {
 };
 
 const ALLOWED_EMAILS = ['jehffranklen@gmail.com', 'mlmcginty93@gmail.com'];
-const BUDGET_DOC_ID  = 'nectra'; // shared doc both users read/write
+const BUDGET_DOC_ID  = 'mcfranklin'; // shared doc both users read/write
 
 // Firebase app instances (set after initFirebase)
 let fbApp, fbAuth, fbDb, budgetDocRef;
