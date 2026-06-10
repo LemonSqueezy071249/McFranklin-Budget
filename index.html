@@ -388,7 +388,6 @@
   <header>
     <div>
       <h1>Nectra</h1>
-      <p id="period-label">Loading...</p>
     </div>
     <span id="conn-indicator" class="conn-status disconnected"><span class="dot"></span> Not connected</span>
   </header>
@@ -412,6 +411,7 @@
       <div class="summary-grid" id="summary-cards"></div>
     </div>
     <div id="dashboard-controls">
+      <p id="period-label" style="font-size:13px; color:var(--muted); font-weight:500;"></p>
       <div class="period-toggle">
         <label>View:</label>
         <button class="toggle-btn" onclick="setPeriod('monthly')">This month</button>
@@ -432,6 +432,7 @@
   <div id="tab-expenses" class="panel">
     <div id="exp-breadcrumb" style="display:none; align-items:center; margin-bottom:10px; padding:8px 12px; background:var(--accent-light); border-radius:var(--radius-sm);"></div>
     <div style="margin-bottom:1.25rem;">
+      <p id="exp-period-label" style="font-size:13px; color:var(--muted); font-weight:500; margin-bottom:8px;"></p>
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;" class="exp-count-search">
         <div class="period-toggle" id="exp-period-toggle" style="flex:1; min-width:0;">
           <label>Period:</label>
@@ -1015,20 +1016,27 @@ function updatePeriodLabel() {
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const now = new Date();
   const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  let label = '';
-  if (state.viewPeriod === 'monthly') {
-    state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear();
-    label = months[now.getMonth()] + ' ' + now.getFullYear();
-  } else if (state.viewPeriod === 'lastmonth') {
-    label = 'Last month (' + months[last.getMonth()] + ' ' + last.getFullYear() + ')';
-  } else if (state.viewPeriod === 'yearly') {
-    label = 'Full year ' + now.getFullYear();
-  } else if (state.viewPeriod === 'ytd') {
-    label = 'January - ' + months[now.getMonth()] + ' ' + now.getFullYear();
-  } else {
-    label = months[state.viewMonth] + ' ' + state.viewYear;
-  }
-  document.getElementById('period-label').textContent = label;
+
+  const labelFor = (period, month, year) => {
+    if (period === 'monthly')   return months[now.getMonth()] + ' ' + now.getFullYear();
+    if (period === 'lastmonth') return 'Last month (' + months[last.getMonth()] + ' ' + last.getFullYear() + ')';
+    if (period === 'yearly')    return 'Full year ' + now.getFullYear();
+    if (period === 'ytd')       return 'January - ' + months[now.getMonth()] + ' ' + now.getFullYear();
+    if (period === 'all')       return 'All time';
+    if (period === 'custom')    return months[month] + ' ' + year;
+    return '';
+  };
+
+  const dashLabel = labelFor(state.viewPeriod, state.viewMonth, state.viewYear);
+  const expLabel  = labelFor(state.expPeriod,  state.expMonth,  state.expYear);
+
+  const dashEl = document.getElementById('period-label');
+  const expEl  = document.getElementById('exp-period-label');
+  if (dashEl) { dashEl.textContent = dashLabel; dashEl.style.display = dashLabel ? '' : 'none'; }
+  if (expEl)  { expEl.textContent  = expLabel;  expEl.style.display  = expLabel  ? '' : 'none'; }
+
+  // Keep viewMonth/viewYear in sync for 'monthly'
+  if (state.viewPeriod === 'monthly') { state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear(); }
 }
 
 function populateMonthPicker() {
@@ -1064,12 +1072,14 @@ function setExpPeriod(p, e) {
   state.expPeriod = p;
   const picker = document.getElementById('exp-month-picker');
   picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  updatePeriodLabel();
   renderExpenseTable();
 }
 
 function setExpCustomMonth(val) {
   const [y, m] = val.split('-').map(Number);
   state.expYear = y; state.expMonth = m - 1;
+  updatePeriodLabel();
   renderExpenseTable();
 }
 
