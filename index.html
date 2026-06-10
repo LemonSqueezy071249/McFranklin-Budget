@@ -154,7 +154,10 @@
   .conn-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; font-weight: 500; }
   .conn-status.connected { background: var(--green-light); color: var(--green-dark); }
   .conn-status.disconnected { background: var(--warn-light); color: var(--warn); }
-  .conn-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .sync-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; font-weight: 500; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .sync-status.syncing { background: var(--accent-light); color: var(--accent); border-color: rgba(88,86,214,0.18); }
+  .sync-status.synced { background: var(--green-light); color: var(--green-dark); border-color: rgba(57,161,90,0.2); }
+  .conn-status .dot, .sync-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .settings-section { background: var(--surface); border-radius: var(--radius-lg); padding: 1.5rem 1.75rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); }
   .settings-section h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
   .filter-chip { padding: 5px 14px; font-size: 13px; border-radius: 20px; border: 1.5px solid var(--border-strong); background: var(--surface); cursor: pointer; color: var(--text-2); font-family: var(--sans); font-weight: 500; transition: all 0.15s; box-shadow: var(--shadow-sm); }
@@ -610,6 +613,12 @@
         Data syncs to Firestore in real time. Both Jeff and Michelle share the same budget automatically.
       </div>
     </div>
+    </div>
+
+    <div style="margin-top:1rem; text-align:center;">
+      <span id="sync-indicator" class="sync-status synced" style="font-size:12px;"><span class="dot"></span> All changes synced</span>
+    </div>
+
   </div>
 
   <div id="tab-budget" class="panel">
@@ -822,12 +831,28 @@ const db = {
   }
 };
 
-// Helper to wait for Firestore sync but avoid false save failures on slow networks.
-function timeoutSave(savePromise, ms = 6000) {
-  const timeout = new Promise(resolve => setTimeout(resolve, ms));
-  const result = Promise.race([savePromise, timeout]);
-  savePromise.catch(e => console.warn('Sync failed', e));
-  return result;
+// Helper to sync updates to Firestore in the background.
+let pendingSyncs = 0;
+
+function setSyncStatus() {
+  const el = document.getElementById('sync-indicator');
+  if (!el) return;
+  if (pendingSyncs > 0) {
+    el.className = 'sync-status syncing';
+    el.innerHTML = `<span class="dot"></span>Syncing ${pendingSyncs} change${pendingSyncs===1?'':'s'}…`;
+  } else {
+    el.className = 'sync-status synced';
+    el.innerHTML = `<span class="dot"></span>All changes synced`;
+  }
+}
+
+function backgroundSave(savePromise) {
+  pendingSyncs = Math.max(0, pendingSyncs + 1);
+  setSyncStatus();
+  savePromise.finally(() => {
+    pendingSyncs = Math.max(0, pendingSyncs - 1);
+    setSyncStatus();
+  }).catch(e => console.warn('Sync failed', e));
 }
 
 // --- Auth ---
@@ -1665,8 +1690,8 @@ async function deleteExpense(idx) {
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
   renderExpenseTable();
   renderDashboard();
-  if (state.sheetUrl) {
-    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+  if (state.connected) {
+    backgroundSave(db.saveExpenses(state.expenses));
   }
 }
 
@@ -1809,8 +1834,8 @@ async function confirmSplit() {
   renderExpenseTable();
   renderDashboard();
 
-  if (state.sheetUrl) {
-    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+  if (state.connected) {
+    backgroundSave(db.saveExpenses(state.expenses));
   }
 }
 
@@ -1900,7 +1925,7 @@ async function saveEdit(idx) {
 
   // Sync to Firestore in the background
   if (state.connected) {
-    db.saveExpenses(state.expenses).catch(e => console.warn('Sync failed', e));
+    backgroundSave(db.saveExpenses(state.expenses));
   }
 }
 
@@ -1990,7 +2015,7 @@ async function saveRules() {
 
   const btn = document.querySelector('[onclick="saveRules()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await timeoutSave(db.saveRules(state.rules)); }
+    if (state.connected) { backgroundSave(db.saveRules(state.rules)); }
   });
 
   // After saving, check if any existing transactions are uncategorized and a
@@ -2040,7 +2065,7 @@ async function applyRulesToUncategorized() {
   const btn = document.querySelector('#rules-apply-prompt .btn-primary');
   if (btn) {
     await btnSave(btn, async () => {
-      if (state.connected) { await timeoutSave(db.saveExpenses(state.expenses)); }
+      if (state.connected) { backgroundSave(db.saveExpenses(state.expenses)); }
     });
   }
 }
@@ -2089,7 +2114,7 @@ async function addExpense() {
   clearForm();
 
   await btnSave(btn, async () => {
-    if (state.connected) { await timeoutSave(db.saveExpenses(state.expenses)); }
+    if (state.connected) { backgroundSave(db.saveExpenses(state.expenses)); }
   }, { successLabel: 'Saved', resetMs: 1800 });
 }
 
@@ -2266,7 +2291,7 @@ async function importCSV() {
   renderDashboard(); renderExpenseTable();
 
   if (state.connected) {
-    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+    backgroundSave(db.saveExpenses(state.expenses));
   }
 
   if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Import Rows'; }
@@ -2462,7 +2487,7 @@ async function saveBudgets() {
   renderDashboard();
   const btn = document.querySelector('[onclick="saveBudgets()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await timeoutSave(db.saveBudgets(state.categories, state.groupOrder)); }
+    if (state.connected) { backgroundSave(db.saveBudgets(state.categories, state.groupOrder)); }
   });
 }
 
@@ -2531,7 +2556,7 @@ async function saveFilters() {
   populatePrefsUI();
   const btn = document.querySelector('[onclick="saveFilters()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await timeoutSave(db.saveFilters(state.filters)); }
+    if (state.connected) { backgroundSave(db.saveFilters(state.filters)); }
   });
 }
 
