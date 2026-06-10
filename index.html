@@ -1762,7 +1762,7 @@ function renderSplitEditor(idx) {
       <span class="text-muted" style="flex:1; font-size:13px;">
         Allocated: $${fmt(allocated)} &nbsp;*&nbsp;
         <span class="split-remaining ${remainCls}">
-          ${isExact ? 'v Fully allocated' : isOver ? `$${fmt(Math.abs(remaining))} over` : `$${fmt(remaining)} remaining`}
+          ${isExact ? 'Fully allocated' : isOver ? `$${fmt(Math.abs(remaining))} over` : `$${fmt(remaining)} remaining`}
         </span>
       </span>
       <button class="split-btn split-btn-cancel" onclick="closeSplit()">Cancel</button>
