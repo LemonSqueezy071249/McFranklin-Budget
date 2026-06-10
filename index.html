@@ -822,6 +822,14 @@ const db = {
   }
 };
 
+// Helper to wait for Firestore sync but avoid false save failures on slow networks.
+function timeoutSave(savePromise, ms = 6000) {
+  const timeout = new Promise(resolve => setTimeout(resolve, ms));
+  const result = Promise.race([savePromise, timeout]);
+  savePromise.catch(e => console.warn('Sync failed', e));
+  return result;
+}
+
 // --- Auth ---
 function signInWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -1982,7 +1990,7 @@ async function saveRules() {
 
   const btn = document.querySelector('[onclick="saveRules()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await Promise.race([db.saveRules(state.rules), new Promise((_,r)=>setTimeout(r,6000))]); }
+    if (state.connected) { await timeoutSave(db.saveRules(state.rules)); }
   });
 
   // After saving, check if any existing transactions are uncategorized and a
@@ -2032,7 +2040,7 @@ async function applyRulesToUncategorized() {
   const btn = document.querySelector('#rules-apply-prompt .btn-primary');
   if (btn) {
     await btnSave(btn, async () => {
-      if (state.connected) { await Promise.race([db.saveExpenses(state.expenses), new Promise((_,r)=>setTimeout(r,6000))]); }
+      if (state.connected) { await timeoutSave(db.saveExpenses(state.expenses)); }
     });
   }
 }
@@ -2081,7 +2089,7 @@ async function addExpense() {
   clearForm();
 
   await btnSave(btn, async () => {
-    if (state.connected) { await Promise.race([db.saveExpenses(state.expenses), new Promise((_,r)=>setTimeout(r,6000))]); }
+    if (state.connected) { await timeoutSave(db.saveExpenses(state.expenses)); }
   }, { successLabel: 'Saved', resetMs: 1800 });
 }
 
@@ -2454,7 +2462,7 @@ async function saveBudgets() {
   renderDashboard();
   const btn = document.querySelector('[onclick="saveBudgets()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await Promise.race([db.saveBudgets(state.categories, state.groupOrder), new Promise((_,r)=>setTimeout(r,6000))]); }
+    if (state.connected) { await timeoutSave(db.saveBudgets(state.categories, state.groupOrder)); }
   });
 }
 
@@ -2523,7 +2531,7 @@ async function saveFilters() {
   populatePrefsUI();
   const btn = document.querySelector('[onclick="saveFilters()"]');
   await btnSave(btn, async () => {
-    if (state.connected) { await Promise.race([db.saveFilters(state.filters), new Promise((_,r)=>setTimeout(r,6000))]); }
+    if (state.connected) { await timeoutSave(db.saveFilters(state.filters)); }
   });
 }
 
