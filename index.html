@@ -1689,8 +1689,8 @@ async function deleteExpense(idx) {
 let splitState = {}; // { idx, total, lines: [{category, amount, memo}] }
 
 function openSplit(idx) {
-  // Close any other open split editors
-  document.querySelectorAll('[id^="split-row-"]').forEach(r => { r.style.display = 'none'; });
+  // Close any other open split or edit editors
+  document.querySelectorAll('[id^="split-row-"],[id^="edit-row-"]').forEach(r => { r.style.display = 'none'; });
 
   const e = state.expenses[idx];
   if (!e) return;
