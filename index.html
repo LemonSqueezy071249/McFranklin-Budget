@@ -1122,7 +1122,7 @@ function getExpFilteredExpenses() {
   const now = new Date();
   const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const knownCats = new Set(state.categories.map(c => c.name));
-  return state.expenses.filter(e => {
+  return state.expenses.map((e, idx) => ({ expense: e, idx })).filter(({ expense: e }) => {
     if (e.date) {
       const d = new Date(e.date + 'T12:00:00');
       if (state.expPeriod === 'monthly'   && !(d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear())) return false;
@@ -1562,9 +1562,13 @@ function setSort(col) {
 
 function renderExpenseTable() {
   renderExpFilterChips();
+  const allBtn = document.getElementById('exp-filter-all');
+  const uncBtn = document.getElementById('exp-filter-uncategorized');
+  if (allBtn) allBtn.classList.toggle('active', !state.expFilter);
+  if (uncBtn) uncBtn.classList.toggle('active', state.expFilter === '__uncategorized__');
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
   const periodRows = getExpFilteredExpenses();
-  const filtered = periodRows.filter(e =>
+  const filtered = periodRows.filter(({ expense: e }) =>
     !q || (e.description||'').toLowerCase().includes(q) ||
           (e.category||'').toLowerCase().includes(q) ||
           (e.memo||'').toLowerCase().includes(q)
@@ -1573,18 +1577,20 @@ function renderExpenseTable() {
   // Sort by active column
   const dir = state.sortDir === 'asc' ? 1 : -1;
   const rows = [...filtered].sort((a, b) => {
+    const x = a.expense;
+    const y = b.expense;
     switch (state.sortCol) {
-      case 'date':        return dir * (a.date||'').localeCompare(b.date||'');
-      case 'description': return dir * (a.description||'').toLowerCase().localeCompare((b.description||'').toLowerCase());
-      case 'category':    return dir * (a.category||'').toLowerCase().localeCompare((b.category||'').toLowerCase());
-      case 'who':         return dir * (a.who||'').toLowerCase().localeCompare((b.who||'').toLowerCase());
-      case 'amount':      return dir * ((parseFloat(a.amount)||0) - (parseFloat(b.amount)||0));
-      default:            return dir * (a.date||'').localeCompare(b.date||'');
+      case 'date':        return dir * (x.date||'').localeCompare(y.date||'');
+      case 'description': return dir * (x.description||'').toLowerCase().localeCompare((y.description||'').toLowerCase());
+      case 'category':    return dir * (x.category||'').toLowerCase().localeCompare((y.category||'').toLowerCase());
+      case 'who':         return dir * (x.who||'').toLowerCase().localeCompare((y.who||'').toLowerCase());
+      case 'amount':      return dir * ((parseFloat(x.amount)||0) - (parseFloat(y.amount)||0));
+      default:            return dir * (x.date||'').localeCompare(y.date||'');
     }
   });
 
   const countEl = document.getElementById('exp-count');
-  const totalAmt = rows.reduce((s,e) => s + (parseFloat(e.amount)||0), 0);
+  const totalAmt = rows.reduce((s,row) => s + (parseFloat(row.expense.amount)||0), 0);
   if (countEl) countEl.textContent = `${rows.length} transaction${rows.length!==1?'s':''} * $${fmt(totalAmt)} total`;
 
   if (!rows.length) {
@@ -1610,8 +1616,7 @@ function renderExpenseTable() {
     ${th('amount','Amount','right')}
     <th></th>
   </tr></thead><tbody>`;
-  rows.forEach((e) => {
-    const idx = state.expenses.indexOf(e);
+  rows.forEach(({ expense: e, idx }) => {
     const isSplit = !!e._splitFrom;
     const isNeg = parseFloat(e.amount) < 0;
     const isUncategorized = !e.category || e.category === 'Uncategorized' || !state.categories.some(c => c.name === e.category);
@@ -1799,7 +1804,8 @@ function closeSplit() {
 async function confirmSplit() {
   const { idx, total, lines } = splitState;
   const allocated = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
-  if (Math.abs(total - allocated) > 0.005) return;
+  const allValid = lines.every(l => l.amount !== '' && !isNaN(parseFloat(l.amount)));
+  if (!allValid || Math.abs(total - allocated) > 0.005) return;
 
   const original = state.expenses[idx];
   const splitRows = lines.map(l => ({
