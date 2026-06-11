@@ -1898,6 +1898,9 @@ function openEdit(idx) {
   if (!row) return;
   row.style.display = '';
 
+  // If transaction is uncategorized, default to first category
+  const defaultCategory = e.category || state.categories[0]?.name || '';
+
   row.querySelector('td').innerHTML = `<div class="edit-form">
     <div class="form-group">
       <label class="field-label">Date</label>
@@ -1909,7 +1912,7 @@ function openEdit(idx) {
     </div>
     <div class="form-group">
       <label class="field-label">Category</label>
-      ${createSearchableSelectHTML(`edit-cat-${idx}`, e.category || '')}
+      ${createSearchableSelectHTML(`edit-cat-${idx}`, defaultCategory)}
     </div>
     <div class="form-group">
       <label class="field-label">Who</label>
@@ -2262,8 +2265,8 @@ function initDynamicSearchableSelects(selectId) {
   
   input.addEventListener('focus', function(e) {
     e.stopPropagation();
-    // Select all text on focus for easy replacement
-    this.select();
+    // Clear the input on focus so user can type in a clean box
+    this.value = '';
     selectContainer.classList.add('open');
     filterDynamicCategoryOptions(selectId, '');
   });
