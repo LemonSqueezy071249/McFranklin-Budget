@@ -176,6 +176,18 @@
   .csv-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; font-size: 13px; }
   .csv-map-grid .csv-map-full { grid-column: 1 / -1; }
   @media (max-width: 520px) { .csv-map-grid { grid-template-columns: 1fr; } .csv-map-grid .csv-map-full { grid-column: 1; } }
+  /* Searchable category dropdown */
+  .searchable-select { position: relative; width: 100%; }
+  .searchable-select input { padding: 9px 12px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); width: 100%; transition: border-color 0.15s, box-shadow 0.15s; font-weight: 400; font-family: var(--sans); font-size: 14px; }
+  .searchable-select input:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px rgba(88,86,214,0.12); }
+  .searchable-options { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1.5px solid var(--border-strong); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); max-height: 240px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; }
+  .searchable-select.open .searchable-options { display: block; }
+  .searchable-option { padding: 10px 12px; cursor: pointer; font-size: 14px; color: var(--text); border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .searchable-option:last-child { border-bottom: none; }
+  .searchable-option:hover { background: var(--surface-2); }
+  .searchable-option.selected { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+  .searchable-option.hidden { display: none; }
+  .searchable-no-results { padding: 12px; text-align: center; color: var(--muted); font-size: 13px; font-style: italic; }
   .filter-editor-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; }
   .filter-editor-row h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
   .filter-cat-grid { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -468,7 +480,11 @@
         </div>
         <div class="form-group">
           <label class="field-label">Category</label>
-          <select id="exp-cat"></select>
+          <div class="searchable-select" id="exp-cat-select">
+            <input type="text" placeholder="Search categories..." class="cat-search-input">
+            <div class="searchable-options"></div>
+          </div>
+          <input type="hidden" id="exp-cat">
         </div>
         <div class="form-group">
           <label class="field-label">Who paid?</label>
@@ -961,6 +977,7 @@ function initApp() {
   loadUserPrefs();
   setTodayDate();
   populateCategorySelect();
+  initSearchableSelect();
   populateMonthPicker();
   populateExpMonthPicker();
   renderDashboard();
@@ -2106,7 +2123,110 @@ function applyRules(description) {
 // Fills the category dropdown in Add Transaction and edit forms.
 function populateCategorySelect() {
   const sel = document.getElementById('exp-cat');
-  if (sel) sel.innerHTML = state.categories.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
+  if (sel) sel.value = ''; // Reset hidden input
+  
+  // Update main searchable dropdown
+  const selectContainer = document.getElementById('exp-cat-select');
+  if (selectContainer) {
+    const optionsDiv = selectContainer.querySelector('.searchable-options');
+    optionsDiv.innerHTML = state.categories.map(c => 
+      `<div class="searchable-option" data-value="${escHtml(c.name)}">${escHtml(c.name)}</div>`
+    ).join('');
+    
+    // Add event listeners to options
+    optionsDiv.querySelectorAll('.searchable-option').forEach(opt => {
+      opt.addEventListener('click', function() {
+        const value = this.getAttribute('data-value');
+        document.getElementById('exp-cat').value = value;
+        document.querySelector('#exp-cat-select .cat-search-input').value = value;
+        selectContainer.classList.remove('open');
+      });
+    });
+  }
+  
+  // Update split/edit/rule selects if they exist
+  updateCategorySelectsInForms();
+}
+
+// Initialize searchable category select
+function initSearchableSelect() {
+  const selectContainer = document.getElementById('exp-cat-select');
+  if (!selectContainer) return;
+  
+  const input = selectContainer.querySelector('.cat-search-input');
+  const optionsDiv = selectContainer.querySelector('.searchable-options');
+  
+  input.addEventListener('focus', function() {
+    selectContainer.classList.add('open');
+    filterCategoryOptions('');
+  });
+  
+  input.addEventListener('input', function() {
+    filterCategoryOptions(this.value);
+  });
+  
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      selectContainer.classList.remove('open');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Select first visible option if there is one
+      const firstVisible = optionsDiv.querySelector('.searchable-option:not(.hidden)');
+      if (firstVisible) {
+        firstVisible.click();
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const options = Array.from(optionsDiv.querySelectorAll('.searchable-option:not(.hidden)'));
+      const firstOption = options[0];
+      if (firstOption) firstOption.focus();
+    }
+  });
+  
+  // Close on blur after a small delay
+  selectContainer.addEventListener('focusout', function(e) {
+    setTimeout(() => {
+      if (!selectContainer.contains(document.activeElement)) {
+        selectContainer.classList.remove('open');
+      }
+    }, 100);
+  });
+  
+  // Prevent closing when clicking in the options area
+  optionsDiv.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+  });
+}
+
+function filterCategoryOptions(searchText) {
+  const selectContainer = document.getElementById('exp-cat-select');
+  if (!selectContainer) return;
+  
+  const optionsDiv = selectContainer.querySelector('.searchable-options');
+  const options = optionsDiv.querySelectorAll('.searchable-option');
+  const searchLower = searchText.toLowerCase();
+  let visibleCount = 0;
+  
+  options.forEach(opt => {
+    const text = opt.getAttribute('data-value').toLowerCase();
+    if (text.startsWith(searchLower)) {
+      opt.classList.remove('hidden');
+      visibleCount++;
+    } else {
+      opt.classList.add('hidden');
+    }
+  });
+  
+  // Show "no results" message if needed
+  if (visibleCount === 0 && optionsDiv.querySelector('.searchable-no-results')) {
+    optionsDiv.querySelector('.searchable-no-results').style.display = 'block';
+  }
+}
+
+// For split lines, edit rows, and rules - keep using standard selects for now
+// but update them when categories change
+function updateCategorySelectsInForms() {
+  // These will be handled by the existing code that renders split lines, edit rows, etc.
 }
 
 // --- Add Transaction ---
