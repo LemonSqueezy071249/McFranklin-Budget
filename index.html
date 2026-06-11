@@ -411,7 +411,7 @@
     <div id="dashboard-controls">
       <p id="period-label" style="font-size:13px; color:var(--muted); font-weight:500;"></p>
       <div class="period-toggle">
-        <label>View:</label>
+        <label>Period:</label>
         <button class="toggle-btn" onclick="setPeriod('monthly')">This month</button>
         <button class="toggle-btn" onclick="setPeriod('lastmonth')">Last month</button>
         <button class="toggle-btn" onclick="setPeriod('ytd')">Year to date</button>
@@ -548,23 +548,8 @@
       <p class="text-sm text-muted" style="margin-bottom:1.25rem;">These are saved on this device only — perfect for setting up each person's phone with the view they care about most.</p>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
         <div class="form-group">
-          <label class="field-label">Default dashboard period</label>
+          <label class="field-label">Default period (Dashboard & Transactions)</label>
           <select id="pref-period">
-            <option value="monthly">This month</option>
-            <option value="lastmonth">Last month</option>
-            <option value="ytd">Year to date</option>
-            <option value="yearly">Full year</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="field-label">Default dashboard filter</label>
-          <select id="pref-filter">
-            <option value="">All categories</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="field-label">Default transactions period</label>
-          <select id="pref-exp-period">
             <option value="monthly">This month</option>
             <option value="lastmonth">Last month</option>
             <option value="ytd">Year to date</option>
@@ -573,10 +558,9 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="field-label">Default transactions filter</label>
-          <select id="pref-exp-filter">
+          <label class="field-label">Default filter (Dashboard & Transactions)</label>
+          <select id="pref-filter">
             <option value="">All categories</option>
-            <option value="__uncategorized__">Uncategorized</option>
           </select>
         </div>
       </div>
@@ -1014,13 +998,30 @@ function switchTab(name) {
 // setPeriod updates state and re-renders the dashboard.
 // populateMonthPicker fills the custom-month dropdown with the last 24 months.
 function setPeriod(p) {
-  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-  event.currentTarget.classList.add('active');
+  // Highlight dashboard buttons
+  document.querySelectorAll('#dashboard-controls .toggle-btn').forEach(b => b.classList.remove('active'));
+  if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+  // Update both dashboard and expenses period so they stay linked
   state.viewPeriod = p;
+  state.expPeriod = p;
+
   const picker = document.getElementById('month-picker');
-  picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  if (picker) picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  const expPicker = document.getElementById('exp-month-picker');
+  if (expPicker) expPicker.style.display = p === 'custom' ? 'inline-block' : 'none';
+
+  // Keep month/year in sync when switching
+  if (p === 'monthly') {
+    const now = new Date();
+    state.viewMonth = now.getMonth(); state.viewYear = now.getFullYear();
+    state.expMonth = state.viewMonth; state.expYear = state.viewYear;
+  }
+
   updatePeriodLabel();
   renderDashboard();
+  renderExpenseTable();
+  syncPeriodButtons();
 }
 
 function setCustomMonth(val) {
@@ -1085,13 +1086,29 @@ function populateExpMonthPicker() {
 }
 
 function setExpPeriod(p, e) {
+  // Highlight expense buttons
   document.querySelectorAll('#exp-period-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
-  e.currentTarget.classList.add('active');
+  if (e && e.currentTarget) e.currentTarget.classList.add('active');
+
+  // Update both expense and dashboard periods so they stay linked
   state.expPeriod = p;
-  const picker = document.getElementById('exp-month-picker');
-  picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  state.viewPeriod = p;
+
+  const expPicker = document.getElementById('exp-month-picker');
+  if (expPicker) expPicker.style.display = p === 'custom' ? 'inline-block' : 'none';
+  const picker = document.getElementById('month-picker');
+  if (picker) picker.style.display = p === 'custom' ? 'inline-block' : 'none';
+
+  if (p === 'monthly') {
+    const now = new Date();
+    state.expMonth = now.getMonth(); state.expYear = now.getFullYear();
+    state.viewMonth = state.expMonth; state.viewYear = state.expYear;
+  }
+
   updatePeriodLabel();
+  renderDashboard();
   renderExpenseTable();
+  syncPeriodButtons();
 }
 
 function setExpCustomMonth(val) {
@@ -1369,14 +1386,30 @@ function prefsKey(key) {
 }
 
 function loadUserPrefs() {
-  const period = localStorage.getItem(prefsKey('dashPeriod'));
-  if (period) state.viewPeriod = period;
-  const filter = localStorage.getItem(prefsKey('dashFilter'));
-  if (filter !== null) state.activeFilter = filter || null;
-  const expPeriod = localStorage.getItem(prefsKey('expPeriod'));
-  if (expPeriod) state.expPeriod = expPeriod;
-  const expFilter = localStorage.getItem(prefsKey('expFilter'));
-  if (expFilter !== null) state.expFilter = expFilter || null;
+  // Prefer combined keys: 'period' and 'filter'. Fallback to legacy keys if present.
+  const combinedPeriod = localStorage.getItem(prefsKey('period'));
+  const combinedFilter = localStorage.getItem(prefsKey('filter'));
+
+  if (combinedPeriod) {
+    state.viewPeriod = combinedPeriod;
+    state.expPeriod = combinedPeriod;
+  } else {
+    const dash = localStorage.getItem(prefsKey('dashPeriod'));
+    const exp = localStorage.getItem(prefsKey('expPeriod'));
+    if (dash) state.viewPeriod = dash;
+    if (exp) state.expPeriod = exp;
+  }
+
+  if (combinedFilter !== null) {
+    state.activeFilter = combinedFilter || null;
+    state.expFilter = combinedFilter || null;
+  } else {
+    const dashF = localStorage.getItem(prefsKey('dashFilter'));
+    const expF  = localStorage.getItem(prefsKey('expFilter'));
+    if (dashF !== null) state.activeFilter = dashF || null;
+    if (expF  !== null) state.expFilter    = expF  || null;
+  }
+
   // Sync button highlight states to match loaded prefs
   syncPeriodButtons();
 }
@@ -1403,33 +1436,27 @@ function populatePrefsUI() {
     `<option value="${escHtml(f.name)}">${escHtml(f.name)}</option>`
   ).join('');
   const filterEl    = document.getElementById('pref-filter');
-  const expFilterEl = document.getElementById('pref-exp-filter');
   if (filterEl)    filterEl.innerHTML    = `<option value="">All categories</option>${filterOptions}`;
-  if (expFilterEl) expFilterEl.innerHTML = `<option value="">All categories</option><option value="__uncategorized__">Uncategorized</option>${filterOptions}`;
-
   const set = (id, key, def) => { const el = document.getElementById(id); if (el) el.value = localStorage.getItem(prefsKey(key)) || def; };
-  set('pref-period',     'dashPeriod', 'monthly');
-  set('pref-filter',     'dashFilter', '');
-  set('pref-exp-period', 'expPeriod',  'monthly');
-  set('pref-exp-filter', 'expFilter',  '');
+  // Populate combined prefs; fallback migration handled in loadUserPrefs
+  set('pref-period', 'period', 'monthly');
+  set('pref-filter', 'filter', '');
 }
 
 function saveUserPrefs() {
+
   const get = id => document.getElementById(id)?.value || '';
-  const period    = get('pref-period')     || 'monthly';
-  const filter    = get('pref-filter');
-  const expPeriod = get('pref-exp-period') || 'monthly';
-  const expFilter = get('pref-exp-filter');
+  const period = get('pref-period') || 'monthly';
+  const filter = get('pref-filter');
 
-  localStorage.setItem(prefsKey('dashPeriod'),  period);
-  localStorage.setItem(prefsKey('dashFilter'),  filter);
-  localStorage.setItem(prefsKey('expPeriod'),   expPeriod);
-  localStorage.setItem(prefsKey('expFilter'),   expFilter);
+  // Save combined keys and set both dashboard and transactions prefs
+  localStorage.setItem(prefsKey('period'), period);
+  localStorage.setItem(prefsKey('filter'), filter || '');
 
-  state.viewPeriod   = period;
+  state.viewPeriod = period;
+  state.expPeriod  = period;
   state.activeFilter = filter || null;
-  state.expPeriod    = expPeriod;
-  state.expFilter    = expFilter || null;
+  state.expFilter    = filter || null;
 
   renderDashboard(); renderExpenseTable(); updatePeriodLabel();
   const btn = document.querySelector('[onclick="saveUserPrefs()"]');
