@@ -188,6 +188,9 @@
   .searchable-option.selected { background: var(--accent-light); color: var(--accent); font-weight: 600; }
   .searchable-option.hidden { display: none; }
   .searchable-no-results { padding: 12px; text-align: center; color: var(--muted); font-size: 13px; font-style: italic; }
+  /* Compact version for split lines and edit forms */
+  .split-line .searchable-select input, .edit-form .searchable-select input { font-size: 13px; padding: 6px 9px; }
+  .split-line .searchable-options, .edit-form .searchable-options { max-height: 200px; }
   .filter-editor-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; }
   .filter-editor-row h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
   .filter-cat-grid { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1769,16 +1772,13 @@ function renderSplitEditor(idx) {
   const isOver = remaining < -0.005;
   const isExact = Math.abs(remaining) < 0.005;
   const remainCls = isOver ? 'over' : isExact ? 'ok' : 'uneven';
-  const catOptions = state.categories.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
 
   let linesHtml = lines.map((l, li) => `
     <div class="split-line" id="split-line-${li}">
-      <select onchange="updateSplitLine(${li},'category',this.value)">
-        ${state.categories.map(c => `<option value="${escHtml(c.name)}" ${c.name===l.category?'selected':''}>${escHtml(c.name)}</option>`).join('')}
-      </select>
+      ${createSearchableSelectHTML(`split-cat-${li}`, l.category)}
       <input type="number" placeholder="Amount" value="${l.amount}" step="0.01"
         onchange="updateSplitLine(${li},'amount',this.value)"
-        onblur="autoFillLast(${li})">
+        onblur="autoFillLast(${li})" style="font-size: 13px; padding: 6px 9px;">
       <button class="del-btn" onclick="removeSplitLine(${li})" style="font-size:14px;">✕</button>
     </div>
     <div style="padding:0 0 6px 0;">
@@ -1803,6 +1803,17 @@ function renderSplitEditor(idx) {
       <button class="split-btn split-btn-confirm" onclick="confirmSplit()" ${isExact ? '' : 'disabled'}>Confirm split</button>
     </div>
   </div>`;
+  
+  // Initialize searchable selects for this split editor
+  setTimeout(() => {
+    lines.forEach((l, li) => {
+      initDynamicSearchableSelects(`split-cat-${li}`);
+      // Update the hidden input when selection changes
+      document.getElementById(`split-cat-${li}`).addEventListener('change', function() {
+        updateSplitLine(li, 'category', this.value);
+      });
+    });
+  }, 0);
 }
 
 function updateSplitLine(li, key, val) {
@@ -1887,10 +1898,6 @@ function openEdit(idx) {
   if (!row) return;
   row.style.display = '';
 
-  const catOptions = state.categories.map(c =>
-    `<option value="${escHtml(c.name)}" ${c.name===e.category?'selected':''}>${escHtml(c.name)}</option>`
-  ).join('');
-
   row.querySelector('td').innerHTML = `<div class="edit-form">
     <div class="form-group">
       <label class="field-label">Date</label>
@@ -1902,7 +1909,7 @@ function openEdit(idx) {
     </div>
     <div class="form-group">
       <label class="field-label">Category</label>
-      <select id="edit-cat-${idx}">${catOptions}</select>
+      ${createSearchableSelectHTML(`edit-cat-${idx}`, e.category || '')}
     </div>
     <div class="form-group">
       <label class="field-label">Who</label>
@@ -1926,6 +1933,11 @@ function openEdit(idx) {
     <button class="btn btn-primary" style="font-size:13px; padding:7px 16px;" onclick="saveEdit(${idx})">Save changes</button>
     <button class="btn btn-secondary" style="font-size:13px; padding:7px 16px;" onclick="closeEdit(${idx})">Cancel</button>
   </div>`;
+
+  // Initialize searchable select for category
+  setTimeout(() => {
+    initDynamicSearchableSelects(`edit-cat-${idx}`);
+  }, 0);
 
   row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -2221,6 +2233,97 @@ function filterCategoryOptions(searchText) {
   if (visibleCount === 0 && optionsDiv.querySelector('.searchable-no-results')) {
     optionsDiv.querySelector('.searchable-no-results').style.display = 'block';
   }
+}
+
+// Helper to create a searchable select for dynamic elements (split lines, edit forms)
+function createSearchableSelectHTML(selectId, currentValue) {
+  return `<div class="searchable-select" id="${selectId}-container">
+    <input type="text" class="cat-search-input" placeholder="Search...">
+    <div class="searchable-options">
+      ${state.categories.map(c => `<div class="searchable-option" data-value="${escHtml(c.name)}">${escHtml(c.name)}</div>`).join('')}
+    </div>
+    <input type="hidden" id="${selectId}" value="${escHtml(currentValue)}">
+  </div>`;
+}
+
+// Initialize searchable selects in dynamic content (split lines, edit forms)
+function initDynamicSearchableSelects(selectId) {
+  const selectContainer = document.getElementById(selectId + '-container');
+  if (!selectContainer) return;
+  
+  const input = selectContainer.querySelector('.cat-search-input');
+  const optionsDiv = selectContainer.querySelector('.searchable-options');
+  
+  if (!input || !optionsDiv) return;
+  
+  // Set initial value from hidden input
+  const hiddenValue = document.getElementById(selectId)?.value || '';
+  input.value = hiddenValue;
+  
+  input.addEventListener('focus', function(e) {
+    e.stopPropagation();
+    // Select all text on focus for easy replacement
+    this.select();
+    selectContainer.classList.add('open');
+    filterDynamicCategoryOptions(selectId, '');
+  });
+  
+  input.addEventListener('input', function(e) {
+    e.stopPropagation();
+    filterDynamicCategoryOptions(selectId, this.value);
+  });
+  
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      selectContainer.classList.remove('open');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const firstVisible = optionsDiv.querySelector('.searchable-option:not(.hidden)');
+      if (firstVisible) firstVisible.click();
+    }
+  });
+  
+  selectContainer.addEventListener('focusout', function(e) {
+    setTimeout(() => {
+      if (!selectContainer.contains(document.activeElement)) {
+        selectContainer.classList.remove('open');
+      }
+    }, 100);
+  });
+  
+  optionsDiv.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+  });
+  
+  // Setup option clicks
+  optionsDiv.querySelectorAll('.searchable-option').forEach(opt => {
+    opt.addEventListener('click', function() {
+      const value = this.getAttribute('data-value');
+      document.getElementById(selectId).value = value;
+      input.value = value;
+      selectContainer.classList.remove('open');
+      // Trigger change event on hidden input
+      document.getElementById(selectId).dispatchEvent(new Event('change'));
+    });
+  });
+}
+
+function filterDynamicCategoryOptions(selectId, searchText) {
+  const container = document.getElementById(selectId + '-container');
+  if (!container) return;
+  
+  const optionsDiv = container.querySelector('.searchable-options');
+  const options = optionsDiv.querySelectorAll('.searchable-option');
+  const searchLower = searchText.toLowerCase();
+  
+  options.forEach(opt => {
+    const text = opt.getAttribute('data-value').toLowerCase();
+    if (text.startsWith(searchLower)) {
+      opt.classList.remove('hidden');
+    } else {
+      opt.classList.add('hidden');
+    }
+  });
 }
 
 // For split lines, edit rows, and rules - keep using standard selects for now
