@@ -151,13 +151,10 @@
   .del-btn:hover { color: var(--danger); background: var(--danger-light); }
   .pencil-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 7px; border-radius: var(--radius-sm); transition: all 0.15s; line-height: 1; }
   .pencil-btn:hover { color: var(--accent); background: var(--accent-light); }
-  .conn-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; font-weight: 500; }
-  .conn-status.connected { background: var(--green-light); color: var(--green-dark); }
-  .conn-status.disconnected { background: var(--warn-light); color: var(--warn); }
   .sync-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; font-weight: 500; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
   .sync-status.syncing { background: var(--accent-light); color: var(--accent); border-color: rgba(88,86,214,0.18); }
   .sync-status.synced { background: var(--green-light); color: var(--green-dark); border-color: rgba(57,161,90,0.2); }
-  .conn-status .dot, .sync-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .sync-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .settings-section { background: var(--surface); border-radius: var(--radius-lg); padding: 1.5rem 1.75rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); }
   .settings-section h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
   .filter-chip { padding: 5px 14px; font-size: 13px; border-radius: 20px; border: 1.5px solid var(--border-strong); background: var(--surface); cursor: pointer; color: var(--text-2); font-family: var(--sans); font-weight: 500; transition: all 0.15s; box-shadow: var(--shadow-sm); }
@@ -243,7 +240,6 @@
     .app { padding: 1rem 1rem 5rem; }
     header { padding: 0.9rem 1.1rem; flex-wrap: wrap; gap: 6px; }
     header h1 { font-size: 1.15rem; }
-    .conn-status { font-size: 11px; padding: 4px 9px; }
 
     /* Tabs — scrollable pill strip */
     .tabs { padding: 3px; gap: 1px; }
@@ -392,7 +388,6 @@
     <div>
       <h1>Nectra</h1>
     </div>
-    <span id="conn-indicator" class="conn-status disconnected"><span class="dot"></span> Not connected</span>
   </header>
 
   <div id="config-banner">
@@ -895,7 +890,6 @@ function initFirebase() {
       signinScreen.style.display = 'flex';
       appRoot.style.display = 'none';
       state.connected = false;
-      setConnStatus(false);
       return;
     }
 
@@ -917,7 +911,6 @@ function initFirebase() {
     if (emailEl) emailEl.textContent = user.email;
 
     state.connected = true;
-    setConnStatus(true);
 
     // Show app immediately from localStorage cache — don't wait for Firestore
     appRoot.style.display = 'block';
@@ -937,13 +930,6 @@ function initFirebase() {
 
     db.listenForChanges();
   });
-}
-
-function setConnStatus(ok) {
-  const el = document.getElementById('conn-indicator');
-  if (!el) return;
-  el.className = 'conn-status ' + (ok ? 'connected' : 'disconnected');
-  el.innerHTML = `<span class="dot"></span> ${ok ? 'Synced' : 'Not signed in'}`;
 }
 
 // Kick off Firebase initialization when DOM is ready
