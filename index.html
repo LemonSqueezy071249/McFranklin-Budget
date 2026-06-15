@@ -1937,10 +1937,12 @@ function openEdit(idx) {
     <button class="btn btn-secondary" style="font-size:13px; padding:7px 16px;" onclick="closeEdit(${idx})">Cancel</button>
   </div>`;
 
-  // Initialize searchable select for category
+  // Initialize searchable select for category, then focus it
   setTimeout(() => {
     initDynamicSearchableSelects(`edit-cat-${idx}`);
-  }, 0);
+    const catInput = document.querySelector(`#edit-cat-${idx}-container .cat-search-input`);
+    if (catInput) catInput.focus();
+  }, 50);
 
   row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
