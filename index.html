@@ -2576,14 +2576,12 @@ function renderBudgetEditor() {
   groups.forEach(grp => {
     const cats = state.categories.map((c,i) => ({...c, _i: i})).filter(c => c.group === grp);
     html += `<div class="budget-group-block" data-group="${escHtml(grp)}"
-      draggable="true"
-      ondragstart="onGroupDragStart(event,'${escHtml(grp)}')"
       ondragover="onGroupDragOver(event)"
       ondragleave="onGroupDragLeave(event)"
       ondrop="onGroupDrop(event,'${escHtml(grp)}')"
       ondragend="onDragEnd(event)">
       <div class="budget-group-header">
-        <span class="drag-handle" title="Drag to reorder group">⠿</span>
+        <span class="drag-handle" title="Drag to reorder group" draggable="true" ondragstart="onGroupDragStart(event,'${escHtml(grp)}')">⠿</span>
         <input class="budget-group-name-input" type="text" value="${escHtml(grp)}"
           onchange="renameGroup('${escHtml(grp)}',this.value)"
           onclick="event.stopPropagation()"
@@ -2593,13 +2591,11 @@ function renderBudgetEditor() {
       <div class="budget-group-body" data-group="${escHtml(grp)}">`;
     cats.forEach(c => {
       html += `<div class="budget-item-row" data-cat-index="${c._i}" data-group="${escHtml(grp)}"
-          draggable="true"
-          ondragstart="onItemDragStart(event,${c._i})"
           ondragover="onItemDragOver(event)"
           ondragleave="onItemDragLeave(event)"
           ondrop="onItemDrop(event,${c._i},'${escHtml(grp)}')"
           ondragend="onDragEnd(event)">
-        <span class="item-drag-handle" title="Drag to reorder">⠿</span>
+        <span class="item-drag-handle" title="Drag to reorder" draggable="true" ondragstart="onItemDragStart(event,${c._i})">⠿</span>
         <input type="text" value="${escHtml(c.name)}" onchange="updateCat(${c._i},'name',this.value)" placeholder="Category name">
         <input type="number" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00" step="0.01" min="0">
         <select class="period-sel" onchange="updateCat(${c._i},'period',this.value)">
@@ -2777,9 +2773,14 @@ function renderFiltersEditor() {
 function toggleFilterRow(fi) { state.filters[fi]._open = !state.filters[fi]._open; renderFiltersEditor(); }
 function updateFilterName(i, val) { state.filters[i].name = val; }
 function removeFilter(i) {
+  const name = state.filters[i].name || 'this filter';
+  if (!confirm(`Delete "${name}"?`)) return;
   if (state.activeFilter === state.filters[i].name) state.activeFilter = null;
+  if (state.expFilter === state.filters[i].name) state.expFilter = null;
   state.filters.splice(i, 1);
   renderFiltersEditor();
+  renderFilterBar();
+  renderExpFilterChips();
 }
 function toggleFilterCat(fi, catName, checked) {
   if (!state.filters[fi].categories) state.filters[fi].categories = [];
