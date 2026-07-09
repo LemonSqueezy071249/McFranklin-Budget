@@ -191,7 +191,9 @@
   /* Compact version for split lines and edit forms */
   .split-line .searchable-select input, .edit-form .searchable-select input { font-size: 13px; padding: 6px 9px; }
   .split-line .searchable-options, .edit-form .searchable-options { max-height: 200px; }
-  .filter-editor-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; }
+  .filter-editor-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; transition: opacity 0.15s; }
+  .filter-editor-row.dragging { opacity: 0.35; }
+  .filter-editor-row.drag-over-item { border-top: 2px solid var(--accent); }
   .filter-editor-row h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
   .filter-cat-grid { display: flex; flex-wrap: wrap; gap: 6px; }
   .filter-cat-check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
@@ -1937,12 +1939,10 @@ function openEdit(idx) {
     <button class="btn btn-secondary" style="font-size:13px; padding:7px 16px;" onclick="closeEdit(${idx})">Cancel</button>
   </div>`;
 
-  // Initialize searchable select for category, then focus it
+  // Initialize searchable select for category
   setTimeout(() => {
     initDynamicSearchableSelects(`edit-cat-${idx}`);
-    const catInput = document.querySelector(`#edit-cat-${idx}-container .cat-search-input`);
-    if (catInput) catInput.focus();
-  }, 50);
+  }, 0);
 
   row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -2746,9 +2746,16 @@ function renderFiltersEditor() {
   state.filters.forEach((f, fi) => {
     const checkedCount = (f.categories||[]).length;
     const isOpen = f._open || false;
-    html += `<div class="filter-editor-row" id="filter-row-${fi}">
+    html += `<div class="filter-editor-row" id="filter-row-${fi}"
+      ondragover="onFilterDragOver(event,${fi})"
+      ondragleave="onFilterDragLeave(event)"
+      ondrop="onFilterDrop(event,${fi})"
+      ondragend="onFilterDragEnd(event)">
       <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleFilterRow(${fi})">
         <div style="display:flex; align-items:center; gap:10px;">
+          <span class="item-drag-handle" title="Drag to reorder" draggable="true"
+            ondragstart="onFilterDragStart(event,${fi})"
+            onclick="event.stopPropagation()">⠿</span>
           <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)"
             onclick="event.stopPropagation()"
             placeholder="Filter name (e.g. Michelle)"
@@ -2757,7 +2764,7 @@ function renderFiltersEditor() {
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:12px; color:var(--muted);">${isOpen ? 'Collapse' : 'Edit'}</span>
-          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">x</button>
+          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">✕</button>
         </div>
       </div>
       ${isOpen ? `<div class="filter-cat-grid" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
@@ -2770,6 +2777,40 @@ function renderFiltersEditor() {
     </div>`;
   });
   el.innerHTML = html;
+}
+
+// --- Filter drag-and-drop ---
+let filterDragSrc = null;
+
+function onFilterDragStart(e, fi) {
+  filterDragSrc = fi;
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation();
+  document.getElementById(`filter-row-${fi}`)?.classList.add('dragging');
+}
+function onFilterDragOver(e, fi) {
+  if (filterDragSrc === null || filterDragSrc === fi) return;
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over-item');
+}
+function onFilterDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over-item');
+}
+function onFilterDrop(e, targetIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-item');
+  if (filterDragSrc === null || filterDragSrc === targetIdx) return;
+  const moved = state.filters.splice(filterDragSrc, 1)[0];
+  const newIdx = filterDragSrc < targetIdx ? targetIdx - 1 : targetIdx;
+  state.filters.splice(newIdx, 0, moved);
+  filterDragSrc = null;
+  renderFiltersEditor();
+}
+function onFilterDragEnd(e) {
+  document.querySelectorAll('.filter-editor-row').forEach(r => {
+    r.classList.remove('dragging', 'drag-over-item');
+  });
+  filterDragSrc = null;
 }
 
 function toggleFilterRow(fi) { state.filters[fi]._open = !state.filters[fi]._open; renderFiltersEditor(); }
