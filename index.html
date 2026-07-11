@@ -191,7 +191,9 @@
   /* Compact version for split lines and edit forms */
   .split-line .searchable-select input, .edit-form .searchable-select input { font-size: 13px; padding: 6px 9px; }
   .split-line .searchable-options, .edit-form .searchable-options { max-height: 200px; }
-  .filter-editor-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; }
+  .filter-editor-row { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; transition: opacity 0.15s; }
+  .filter-editor-row.dragging { opacity: 0.35; }
+  .filter-editor-row.drag-over-item { border-top: 2px solid var(--accent); }
   .filter-editor-row h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
   .filter-cat-grid { display: flex; flex-wrap: wrap; gap: 6px; }
   .filter-cat-check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
@@ -517,10 +519,10 @@
       <p class="text-sm text-muted" style="margin-bottom:1rem;">Export transactions from your bank as CSV, then upload here. Rules will auto-categorize what they can — the rest goes to Uncategorized for you to sort.</p>
       <div class="import-area" id="drop-zone" onclick="document.getElementById('csv-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
         <div class="icon">📂</div>
-        <p>Click to choose a CSV file, or drag and drop</p>
-        <p style="font-size:12px; margin-top:4px;">Supports most bank export formats</p>
+        <p>Click to choose a file, or drag and drop</p>
+        <p style="font-size:12px; margin-top:4px;">Supports CSV, QFX, OFX, QBO</p>
       </div>
-      <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSVFile(event)">
+      <input type="file" id="csv-input" accept=".csv,.qfx,.ofx,.qbo" style="display:none" onchange="handleImportFile(event)">
       <div id="csv-preview" style="margin-top:1.5rem; display:none;">
         <h3 style="font-size:14px; font-weight:500; margin-bottom:0.75rem;">Map columns</h3>
         <div id="csv-map-grid" class="csv-map-grid"></div>
@@ -1937,12 +1939,10 @@ function openEdit(idx) {
     <button class="btn btn-secondary" style="font-size:13px; padding:7px 16px;" onclick="closeEdit(${idx})">Cancel</button>
   </div>`;
 
-  // Initialize searchable select for category, then focus it
+  // Initialize searchable select for category
   setTimeout(() => {
     initDynamicSearchableSelects(`edit-cat-${idx}`);
-    const catInput = document.querySelector(`#edit-cat-${idx}-container .cat-search-input`);
-    if (catInput) catInput.focus();
-  }, 50);
+  }, 0);
 
   row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -2374,8 +2374,196 @@ function clearForm() {
 // --- CSV Import ---
 function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
 function handleDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
-function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); parseCSV(e.dataTransfer.files[0]); }
-function handleCSVFile(e) { parseCSV(e.target.files[0]); }
+function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover'); routeImportFile(e.dataTransfer.files[0]); }
+function handleImportFile(e) { routeImportFile(e.target.files[0]); }
+
+// Routes to the correct parser based on file extension
+function routeImportFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'qfx' || ext === 'ofx' || ext === 'qbo') {
+    parseQFX(file);
+  } else {
+    parseCSV(file);
+  }
+}
+
+// Parses QFX/OFX/QBO files directly — no column mapping needed since
+// the format is fixed: <DTPOSTED>, <TRNAMT>, <NAME>/<MEMO> fields.
+// Transactions are imported immediately with rules applied.
+function parseQFX(file) {
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const text = e.target.result;
+    const transactions = [];
+
+    // QFX/OFX uses SGML-like tags — extract all <STMTTRN> blocks
+    const txnBlocks = text.split(/<STMTTRN>/i).slice(1);
+
+    const get = (block, tag) => {
+      const match = block.match(new RegExp(`<${tag}>([^<\r\n]+)`, 'i'));
+      return match ? match[1].trim() : '';
+    };
+
+    const parseOFXDate = (raw) => {
+      // Format: YYYYMMDDHHMMSS or YYYYMMDD
+      const d = raw.replace(/\[.*\]/, '').trim();
+      if (d.length >= 8) {
+        const y = d.slice(0,4), m = d.slice(4,6), day = d.slice(6,8);
+        return `${y}-${m}-${day}`;
+      }
+      return '';
+    };
+
+    for (const block of txnBlocks) {
+      const date   = parseOFXDate(get(block, 'DTPOSTED'));
+      const rawAmt = get(block, 'TRNAMT');
+      const amount = parseFloat(rawAmt);
+      const name   = get(block, 'NAME') || get(block, 'MEMO') || get(block, 'PAYEE') || '';
+      const memo   = get(block, 'MEMO') || '';
+
+      if (!date || isNaN(amount) || amount === 0) continue;
+      transactions.push({ date, amount, name, memo });
+    }
+
+    if (!transactions.length) {
+      alert('No transactions found in this file. Make sure it\'s a valid QFX/OFX file.');
+      return;
+    }
+
+    // Show a preview before importing
+    showQFXPreview(transactions, file.name);
+  };
+  reader.readAsText(file);
+}
+
+// Shows a QFX preview with rule-matched categories — simpler than CSV mapper
+// since there's no column mapping needed.
+function showQFXPreview(transactions, filename) {
+  state.qfxTransactions = transactions;
+
+  const fallbackEl = document.getElementById('csv-cat-col');
+  const fallback = fallbackEl?.value || 'Uncategorized';
+
+  let autoCount = 0, deleteCount = 0, uncatCount = 0;
+
+  const rowsHtml = transactions.map(t => {
+    const match = applyRules(t.name);
+    let categoryCell;
+    if (match === '__delete__') {
+      deleteCount++;
+      categoryCell = `<td><span style="background:var(--danger-light);color:var(--danger);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;">🗑 Delete</span></td>`;
+    } else if (match) {
+      autoCount++;
+      categoryCell = `<td><span class="badge">${escHtml(match)}</span> <span style="font-size:10px;color:var(--accent);font-weight:600;">rule</span></td>`;
+    } else {
+      uncatCount++;
+      categoryCell = `<td><span style="background:var(--warn-light);color:var(--warn);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;">${escHtml(fallback)}</span></td>`;
+    }
+    const isNeg = t.amount < 0;
+    const amtStyle = isNeg ? 'color:var(--green-dark)' : '';
+    const amtDisplay = isNeg ? `-$${fmt(Math.abs(t.amount))}` : `$${fmt(t.amount)}`;
+    return `<tr>
+      <td class="date-col">${t.date}</td>
+      <td>${escHtml(t.name)}</td>
+      <td class="text-muted" style="font-size:12px;">${escHtml(t.memo)}</td>
+      <td style="text-align:right;font-weight:600;${amtStyle}">${amtDisplay}</td>
+      ${categoryCell}
+    </tr>`;
+  }).join('');
+
+  const total = transactions.length;
+  const parts = [];
+  if (autoCount)   parts.push(`${autoCount} auto-categorized`);
+  if (deleteCount) parts.push(`${deleteCount} will be deleted`);
+  if (uncatCount)  parts.push(`${uncatCount} → ${fallback}`);
+
+  // Reuse the csv-preview panel with a simplified layout
+  document.getElementById('csv-preview').style.display = 'block';
+  document.getElementById('csv-success').style.display = 'none';
+  document.getElementById('csv-map-grid').innerHTML = `
+    <div class="csv-map-full" style="padding:8px 12px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:13px;color:var(--accent);font-weight:500;">
+      QFX/OFX file detected — columns mapped automatically from <strong>${escHtml(filename)}</strong>
+    </div>
+    <div class="csv-map-full">
+      <label class="field-label" style="font-size:11px;">Fallback category</label>
+      <select id="csv-cat-col" style="font-size:13px; padding:6px 8px; margin-top:4px;" onchange="refreshQFXPreview()">
+        <option value="Uncategorized" selected>Uncategorized (recommended)</option>
+        ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
+      </select>
+    </div>`;
+
+  document.getElementById('csv-row-count').textContent =
+    `${total} transaction${total!==1?'s':''} found${parts.length ? ' · ' + parts.join(', ') : ''}`;
+
+  document.getElementById('csv-preview-table').innerHTML = `
+    <table class="expense-table" style="font-size:12px;">
+      <thead><tr><th>Date</th><th>Description</th><th>Memo</th><th style="text-align:right">Amount</th><th style="color:var(--accent)">Will import as</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+
+  // Swap the Import button to use QFX importer
+  const importBtn = document.getElementById('import-btn');
+  if (importBtn) importBtn.onclick = importQFX;
+}
+
+function refreshQFXPreview() {
+  if (state.qfxTransactions) showQFXPreview(state.qfxTransactions, '');
+}
+
+// Imports the already-parsed QFX transactions into state
+async function importQFX() {
+  const fallback = document.getElementById('csv-cat-col')?.value || 'Uncategorized';
+  const importBtn = document.getElementById('import-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing...'; }
+  if (cancelBtn) { cancelBtn.disabled = true; }
+
+  let added = 0, autoCat = 0, deleted = 0, refunds = 0;
+  const newTransactions = [];
+
+  for (const t of (state.qfxTransactions || [])) {
+    const match = applyRules(t.name);
+    if (match === '__delete__') { deleted++; continue; }
+    if (match) autoCat++;
+    if (t.amount < 0) refunds++;
+    newTransactions.push({
+      date: t.date,
+      amount: t.amount,
+      category: match || fallback,
+      description: t.name,
+      memo: t.memo || '',
+      who: 'Import'
+    });
+    added++;
+  }
+
+  state.expenses.push(...newTransactions);
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderDashboard();
+  renderExpenseTable();
+
+  if (state.connected) {
+    try { await db.saveExpenses(state.expenses); } catch(e) { console.warn('Sync failed', e); }
+  }
+
+  if (importBtn) { importBtn.disabled = false; importBtn.textContent = 'Import Rows'; importBtn.onclick = importCSV; }
+  if (cancelBtn) { cancelBtn.disabled = false; }
+
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  state.csvRows = []; state.csvHeaders = []; state.qfxTransactions = null;
+
+  const uncat = added - autoCat - refunds;
+  const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
+  const deletedNote = deleted > 0 ? `, ${deleted} skipped by rules` : '';
+  const successEl = document.getElementById('csv-success');
+  successEl.style.display = 'block';
+  successEl.innerHTML = `<div class="status-msg success" style="display:block;">
+    Imported ${added} transaction${added!==1?'s':''}${refundNote}${deletedNote}${autoCat > 0 ? ` - ${autoCat} auto-categorized` : ''}${uncat > 0 ? `, <strong>${uncat} need categorizing</strong>` : ', all categorized!'}.
+  </div>`;
+  setTimeout(() => { successEl.style.display = 'none'; }, 8000);
+}
 
 function cancelCSV() {
   document.getElementById('csv-preview').style.display = 'none';
@@ -2746,9 +2934,16 @@ function renderFiltersEditor() {
   state.filters.forEach((f, fi) => {
     const checkedCount = (f.categories||[]).length;
     const isOpen = f._open || false;
-    html += `<div class="filter-editor-row" id="filter-row-${fi}">
+    html += `<div class="filter-editor-row" id="filter-row-${fi}"
+      ondragover="onFilterDragOver(event,${fi})"
+      ondragleave="onFilterDragLeave(event)"
+      ondrop="onFilterDrop(event,${fi})"
+      ondragend="onFilterDragEnd(event)">
       <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleFilterRow(${fi})">
         <div style="display:flex; align-items:center; gap:10px;">
+          <span class="item-drag-handle" title="Drag to reorder" draggable="true"
+            ondragstart="onFilterDragStart(event,${fi})"
+            onclick="event.stopPropagation()">⠿</span>
           <input type="text" value="${escHtml(f.name)}" onchange="updateFilterName(${fi},this.value)"
             onclick="event.stopPropagation()"
             placeholder="Filter name (e.g. Michelle)"
@@ -2757,7 +2952,7 @@ function renderFiltersEditor() {
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:12px; color:var(--muted);">${isOpen ? 'Collapse' : 'Edit'}</span>
-          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">x</button>
+          <button class="del-btn" onclick="event.stopPropagation(); removeFilter(${fi})">✕</button>
         </div>
       </div>
       ${isOpen ? `<div class="filter-cat-grid" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
@@ -2770,6 +2965,40 @@ function renderFiltersEditor() {
     </div>`;
   });
   el.innerHTML = html;
+}
+
+// --- Filter drag-and-drop ---
+let filterDragSrc = null;
+
+function onFilterDragStart(e, fi) {
+  filterDragSrc = fi;
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation();
+  document.getElementById(`filter-row-${fi}`)?.classList.add('dragging');
+}
+function onFilterDragOver(e, fi) {
+  if (filterDragSrc === null || filterDragSrc === fi) return;
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over-item');
+}
+function onFilterDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over-item');
+}
+function onFilterDrop(e, targetIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-item');
+  if (filterDragSrc === null || filterDragSrc === targetIdx) return;
+  const moved = state.filters.splice(filterDragSrc, 1)[0];
+  const newIdx = filterDragSrc < targetIdx ? targetIdx - 1 : targetIdx;
+  state.filters.splice(newIdx, 0, moved);
+  filterDragSrc = null;
+  renderFiltersEditor();
+}
+function onFilterDragEnd(e) {
+  document.querySelectorAll('.filter-editor-row').forEach(r => {
+    r.classList.remove('dragging', 'drag-over-item');
+  });
+  filterDragSrc = null;
 }
 
 function toggleFilterRow(fi) { state.filters[fi]._open = !state.filters[fi]._open; renderFiltersEditor(); }
