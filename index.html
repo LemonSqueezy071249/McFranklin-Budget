@@ -2115,11 +2115,19 @@ async function applyRulesToUncategorized() {
   renderDashboard();
 
   const btn = document.querySelector('#rules-apply-prompt .btn-primary');
+  const promptEl = document.getElementById('rules-apply-prompt');
+  const label = `Applied to ${changed} transaction${changed!==1?'s':''}${deleted?`, ${deleted} deleted`:''}`;
+
   if (btn) {
     await btnSave(btn, async () => {
       if (state.connected) { backgroundSave(db.saveExpenses(state.expenses)); }
-    });
+    }, { successLabel: label, resetMs: 2000 });
   }
+
+  // Hide the prompt after the success state has shown
+  setTimeout(() => {
+    if (promptEl) promptEl.style.display = 'none';
+  }, 2200);
 }
 
 // --- Utilities -------------------------------------------------------
