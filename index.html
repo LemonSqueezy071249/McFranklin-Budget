@@ -541,7 +541,7 @@
             <div class="form-group" id="recur-date-group">
               <label class="field-label">Day of month</label>
               <select id="exp-recur-date" onchange="updateRecurringFields()">
-                ${Array.from({length:31},(_,i)=>`<option value="${i+1}"${i===0?' selected':''}>${i+1}</option>`).join('')}
+                <option value="1">1</option>
               </select>
             </div>
           </div>
@@ -2471,7 +2471,18 @@ function toggleRecurring() {
   const checked = document.getElementById('exp-recurring')?.checked;
   const fields = document.getElementById('recurring-fields');
   if (fields) fields.style.display = checked ? 'contents' : 'none';
-  if (checked) updateRecurringFields();
+  if (checked) {
+    // Populate day-of-month options if not already done
+    const sel = document.getElementById('exp-recur-date');
+    if (sel && sel.options.length === 1) {
+      for (let i = 2; i <= 31; i++) {
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = i;
+        sel.appendChild(opt);
+      }
+    }
+    updateRecurringFields();
+  }
 }
 
 function updateRecurringFields() {
