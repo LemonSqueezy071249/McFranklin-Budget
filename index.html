@@ -6,6 +6,7 @@
 <title>Nectra</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#5856D6">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Budget">
@@ -898,6 +899,13 @@ function hideSplash() {
   if (!splash) return;
   splash.classList.add('hiding');
   setTimeout(() => { splash.style.display = 'none'; }, 320);
+}
+
+function setConnStatus(ok) {
+  const el = document.getElementById('conn-indicator');
+  if (!el) return;
+  el.className = 'conn-status ' + (ok ? 'connected' : 'disconnected');
+  el.innerHTML = `<span class="dot"></span> ${ok ? 'Synced' : 'Not signed in'}`;
 }
 
 function initFirebase() {
