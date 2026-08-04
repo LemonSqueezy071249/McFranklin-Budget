@@ -102,15 +102,17 @@ async function runMigration() {
   if (!user) { showStatus('Not signed in', 'error'); return; }
 
   try {
-    log('Starting migration for ' + user.email);
+    log('Starting migration for ' + user.email + ' (uid: ' + user.uid + ')');
 
-    // 1. Check if user already has a /users/{uid} doc
+    // Step 1: read user doc
+    log('Step 1: reading /users/' + user.uid + '...');
     const userRef  = db.collection('users').doc(user.uid);
     const userSnap = await userRef.get();
+    log('Step 1 OK: user doc ' + (userSnap.exists ? 'exists' : 'does not exist'));
 
     if (userSnap.exists) {
       const existingFamilyId = userSnap.data().familyId;
-      log('User doc already exists — familyId: ' + existingFamilyId);
+      log('Already migrated — familyId: ' + existingFamilyId);
       showStatus('Already migrated! Family ID: ' + existingFamilyId, 'success');
       document.getElementById('family-id-display').textContent = existingFamilyId;
       document.getElementById('step-migrate').style.display = 'none';
@@ -118,20 +120,26 @@ async function runMigration() {
       return;
     }
 
-    // 2. Check if the family doc already exists (Jeff ran first)
+    // Step 2: check family doc
+    log('Step 2: checking /families/' + FAMILY_ID + '...');
     const familyRef  = db.collection('families').doc(FAMILY_ID);
     const familySnap = await familyRef.get();
+    log('Step 2 OK: family doc ' + (familySnap.exists ? 'exists' : 'does not exist'));
 
     if (!familySnap.exists) {
-      // First user (Jeff) — create the family and migrate the old data
-      log('Family does not exist — creating it and migrating data...');
+      // Step 3: read old data
+      log('Step 3: reading old data from /' + OLD_DOC_PATH + '...');
+      let oldData = {};
+      try {
+        const oldSnap = await db.doc(OLD_DOC_PATH).get();
+        oldData = oldSnap.exists ? oldSnap.data() : {};
+        log('Step 3 OK: old data ' + (oldSnap.exists ? 'found (' + (oldData.expenses||[]).length + ' expenses)' : 'empty — starting fresh'));
+      } catch(e) {
+        log('Step 3 WARN: could not read old data (' + e.message + ') — will start with empty data');
+      }
 
-      // Read old data
-      const oldSnap = await db.doc(OLD_DOC_PATH).get();
-      const oldData = oldSnap.exists ? oldSnap.data() : {};
-      log('Old data read: ' + (oldSnap.exists ? 'found' : 'empty'));
-
-      // Write new family doc
+      // Step 4: create family doc
+      log('Step 4: creating /families/' + FAMILY_ID + '...');
       await familyRef.set({
         meta: {
           name: FAMILY_NAME,
@@ -154,11 +162,11 @@ async function runMigration() {
           filters:    oldData.filters    || []
         }
       });
-      log('Family doc created with migrated data');
+      log('Step 4 OK: family doc created');
 
     } else {
-      // Second user (Michelle) — join the existing family
-      log('Family exists — joining as member...');
+      // Step 4b: join existing family
+      log('Step 4: joining existing family as member...');
       await familyRef.update({
         [`members.${user.uid}`]: {
           email: user.email,
@@ -167,17 +175,18 @@ async function runMigration() {
           joinedAt: firebase.firestore.FieldValue.serverTimestamp()
         }
       });
-      log('Added as member of family');
+      log('Step 4 OK: added as member');
     }
 
-    // 3. Create /users/{uid} doc pointing to this family
+    // Step 5: create user doc
+    log('Step 5: creating /users/' + user.uid + '...');
     await userRef.set({
       familyId: FAMILY_ID,
       email: user.email,
       displayName: user.displayName || '',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    log('User doc created pointing to family: ' + FAMILY_ID);
+    log('Step 5 OK: user doc created');
 
     log('Migration complete!');
     showStatus('Migration complete!', 'success');
@@ -186,7 +195,7 @@ async function runMigration() {
     document.getElementById('step-done').style.display = 'block';
 
   } catch(e) {
-    log('ERROR: ' + e.message);
+    log('FAILED at step above: ' + e.code + ' — ' + e.message);
     showStatus('Migration failed: ' + e.message, 'error');
     btn.disabled = false; btn.textContent = 'Retry Migration';
   }
