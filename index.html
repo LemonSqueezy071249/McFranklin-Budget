@@ -645,6 +645,16 @@
     </div>
 
     <div class="settings-section">
+      <h2>Family</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1rem;">Share this link to invite someone to your family budget. Anyone with the link can join.</p>
+      <button id="copy-invite-btn" class="btn btn-secondary" style="font-size:13px;" onclick="copyInviteLink()">Copy invite link</button>
+      <div style="margin-top:1.25rem;">
+        <h3 style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Members</h3>
+        <div id="family-members-list" style="font-size:13px;color:var(--muted);">Loading...</div>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <h2>Account</h2>
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
@@ -769,102 +779,47 @@ const FIREBASE_CONFIG = {
   appId: "1:1091989334005:web:cda64638f3c2b612aea2bc"
 };
 
-const ALLOWED_EMAILS = ['jehffranklen@gmail.com', 'mlmcginty93@gmail.com'];
-const BUDGET_DOC_ID  = 'mcfranklin'; // shared doc both users read/write
+// No hardcoded email list or doc ID — family membership is stored in Firestore
+// Each user has /users/{uid} pointing to their familyId
+// Family data lives at /families/{familyId}/data (nested in the family doc)
 
 // Firebase app instances (set after initFirebase)
-let fbApp, fbAuth, fbDb, budgetDocRef;
+let fbApp, fbAuth, fbDb, familyRef;
+let currentFamilyId = null;
 
-// --- Database helpers ---
-// All reads/writes go through this db object. Each write merges the full
-// collection so Firestore always reflects exactly what the app has.
+// Points to the data sub-object within the family doc
 const db = {
-  // Saves all expenses as a single array field - no drift possible
   async saveExpenses(expenses) {
-    await budgetDocRef.set({ expenses }, { merge: true });
+    await familyRef.update({ 'data.expenses': expenses });
   },
   async saveBudgets(categories, groupOrder) {
-    await budgetDocRef.set({ categories, groupOrder: groupOrder || [] }, { merge: true });
+    await familyRef.update({ 'data.categories': categories, 'data.groupOrder': groupOrder || [] });
   },
   async saveRules(rules) {
-    await budgetDocRef.set({ rules }, { merge: true });
+    await familyRef.update({ 'data.rules': rules });
   },
   async saveFilters(filters) {
-    // Strip internal _open UI state before persisting
     const clean = filters.map(f => { const { _open, ...rest } = f; return rest; });
-    await budgetDocRef.set({ filters: clean }, { merge: true });
+    await familyRef.update({ 'data.filters': clean });
   },
 
-  // Loads all data from Firestore and updates state + localStorage
+  // Loads all data from the family doc
   async loadAll() {
-    const snap = await budgetDocRef.get();
-    if (!snap.exists) {
-      // First time - write defaults so the doc exists
-      await budgetDocRef.set({
-        expenses: [],
-        categories: state.categories,
-        groupOrder: [],
-        rules: [],
-        filters: []
-      });
-      return;
-    }
-    const data = snap.data();
-    if (Array.isArray(data.expenses)) {
-      state.expenses = data.expenses.map(e => ({
-        ...e,
-        date: e.date || '',
-        amount: parseFloat(e.amount) || 0
-      }));
-      localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
-    }
-    if (Array.isArray(data.categories) && data.categories.length > 0) {
-      state.categories = data.categories;
-      localStorage.setItem('budget_cats', JSON.stringify(state.categories));
-    }
-    if (Array.isArray(data.groupOrder) && data.groupOrder.length > 0) {
-      state.groupOrder = data.groupOrder;
-      localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
-    }
-    if (Array.isArray(data.rules)) {
-      state.rules = data.rules;
-      localStorage.setItem('budget_rules', JSON.stringify(state.rules));
-    }
-    if (Array.isArray(data.filters)) {
-      state.filters = data.filters;
-      localStorage.setItem('budget_filters', JSON.stringify(state.filters));
-    }
+    const snap = await familyRef.get();
+    if (!snap.exists) throw new Error('Family document not found');
+    const raw = snap.data().data || {};
+    applyFirestoreData(raw);
   },
 
-  // Sets up a real-time listener - any change by Michelle shows up for Jeff instantly
+  // Real-time listener on the family doc
   listenForChanges() {
-    budgetDocRef.onSnapshot(snap => {
+    familyRef.onSnapshot(snap => {
       if (!snap.exists || snap.metadata.hasPendingWrites) return;
-      const data = snap.data();
-      let changed = false;
-      if (Array.isArray(data.expenses)) {
-        state.expenses = data.expenses.map(e => ({ ...e, amount: parseFloat(e.amount)||0 }));
-        localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
-        changed = true;
-      }
-      if (Array.isArray(data.categories) && data.categories.length > 0) {
-        state.categories = data.categories;
-        localStorage.setItem('budget_cats', JSON.stringify(state.categories));
-        changed = true;
-      }
-      if (Array.isArray(data.groupOrder)) {
-        state.groupOrder = data.groupOrder;
-        localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
-      }
-      if (Array.isArray(data.rules)) {
-        state.rules = data.rules;
-        localStorage.setItem('budget_rules', JSON.stringify(state.rules));
-      }
-      if (Array.isArray(data.filters)) {
-        state.filters = data.filters;
-        localStorage.setItem('budget_filters', JSON.stringify(state.filters));
-      }
-      if (changed) {
+      const raw = snap.data().data || {};
+      const prev = JSON.stringify({ e: state.expenses.length, c: state.categories.length });
+      applyFirestoreData(raw);
+      const next = JSON.stringify({ e: state.expenses.length, c: state.categories.length });
+      if (prev !== next) {
         renderDashboard();
         renderExpenseTable();
         renderBudgetEditor();
@@ -873,6 +828,30 @@ const db = {
     });
   }
 };
+
+// Applies raw Firestore data object to state and localStorage
+function applyFirestoreData(data) {
+  if (Array.isArray(data.expenses)) {
+    state.expenses = data.expenses.map(e => ({ ...e, amount: parseFloat(e.amount)||0 }));
+    localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  }
+  if (Array.isArray(data.categories) && data.categories.length > 0) {
+    state.categories = data.categories;
+    localStorage.setItem('budget_cats', JSON.stringify(state.categories));
+  }
+  if (Array.isArray(data.groupOrder) && data.groupOrder.length > 0) {
+    state.groupOrder = data.groupOrder;
+    localStorage.setItem('budget_group_order', JSON.stringify(state.groupOrder));
+  }
+  if (Array.isArray(data.rules)) {
+    state.rules = data.rules;
+    localStorage.setItem('budget_rules', JSON.stringify(state.rules));
+  }
+  if (Array.isArray(data.filters)) {
+    state.filters = data.filters;
+    localStorage.setItem('budget_filters', JSON.stringify(state.filters));
+  }
+}
 
 // Helper to sync updates to Firestore in the background.
 let pendingSyncs = 0;
@@ -925,34 +904,54 @@ function initFirebase() {
   fbApp  = firebase.initializeApp(FIREBASE_CONFIG);
   fbAuth = firebase.auth();
   fbDb   = firebase.firestore();
-  budgetDocRef = fbDb.collection('budgets').doc(BUDGET_DOC_ID);
 
-  // Watch auth state - show sign-in screen or app accordingly
   fbAuth.onAuthStateChanged(async user => {
     const signinScreen = document.getElementById('signin-screen');
-    const appRoot = document.getElementById('app-root');
-    const banner  = document.getElementById('config-banner');
+    const appRoot      = document.getElementById('app-root');
+    const banner       = document.getElementById('config-banner');
+    const headerSignout = document.getElementById('header-signout');
 
     if (!user) {
-      // Not signed in — hide splash, show sign-in screen
       hideSplash();
       signinScreen.style.display = 'flex';
       appRoot.style.display = 'none';
       state.connected = false;
+      setConnStatus(false);
+      if (headerSignout) headerSignout.style.display = 'none';
       return;
     }
 
-    // Check email is on the allow-list
-    if (!ALLOWED_EMAILS.includes(user.email)) {
+    // Look up the user's family from /users/{uid}
+    let familyId = null;
+    try {
+      const userSnap = await fbDb.collection('users').doc(user.uid).get();
+      if (userSnap.exists) {
+        familyId = userSnap.data().familyId;
+      }
+    } catch(e) {
+      console.error('Failed to look up user family', e);
+    }
+
+    if (!familyId) {
+      // User has no family — check for invite in URL, else show no-family screen
       hideSplash();
-      fbAuth.signOut();
-      alert('Access denied. Only ' + ALLOWED_EMAILS.join(' and ') + ' can use this app.');
+      const invite = getInviteFromURL();
+      if (invite) {
+        await joinFamilyViaInvite(user, invite);
+        return;
+      }
+      showNoFamilyScreen(user);
       return;
     }
 
-    // Signed in and authorized
+    // Set up the family reference
+    currentFamilyId = familyId;
+    familyRef = fbDb.collection('families').doc(familyId);
+
+    // Signed in with a family
     signinScreen.style.display = 'none';
     if (banner) banner.style.display = 'none';
+    if (headerSignout) headerSignout.style.display = 'block';
 
     const nameEl  = document.getElementById('settings-user-name');
     const emailEl = document.getElementById('settings-user-email');
@@ -960,13 +959,13 @@ function initFirebase() {
     if (emailEl) emailEl.textContent = user.email;
 
     state.connected = true;
+    setConnStatus(true);
 
-    // Show app immediately from localStorage cache — don't wait for Firestore
+    // Show app from localStorage immediately, sync in background
     appRoot.style.display = 'block';
     initApp();
     hideSplash();
 
-    // Then sync from Firestore in the background
     db.loadAll().then(() => {
       renderDashboard();
       renderExpenseTable();
@@ -975,10 +974,110 @@ function initFirebase() {
       renderFiltersEditor();
       populateCategorySelect();
       populatePrefsUI();
+      renderFamilyMembers();
     }).catch(e => console.error('Failed to load data', e));
 
     db.listenForChanges();
   });
+}
+
+// --- Invite link helpers ---
+function getInviteFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('invite'); // ?invite={familyId}
+}
+
+function generateInviteLink() {
+  if (!currentFamilyId) return '';
+  const base = window.location.origin + window.location.pathname;
+  return base + '?invite=' + currentFamilyId;
+}
+
+async function joinFamilyViaInvite(user, familyId) {
+  try {
+    const famRef  = fbDb.collection('families').doc(familyId);
+    const famSnap = await famRef.get();
+    if (!famSnap.exists) {
+      showNoFamilyScreen(user, 'Invite link is invalid or expired.');
+      return;
+    }
+    // Add user to family members
+    await famRef.update({
+      [`members.${user.uid}`]: {
+        email: user.email,
+        displayName: user.displayName || '',
+        role: 'member',
+        joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }
+    });
+    // Create user doc
+    await fbDb.collection('users').doc(user.uid).set({
+      familyId,
+      email: user.email,
+      displayName: user.displayName || '',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // Clear invite param from URL and reload
+    window.history.replaceState({}, '', window.location.pathname);
+    window.location.reload();
+  } catch(e) {
+    showNoFamilyScreen(user, 'Failed to join: ' + e.message);
+  }
+}
+
+function showNoFamilyScreen(user, errorMsg) {
+  const signinScreen = document.getElementById('signin-screen');
+  const appRoot = document.getElementById('app-root');
+  signinScreen.style.display = 'none';
+  appRoot.style.display = 'block';
+  hideSplash();
+
+  // Show a "you need a family" splash inside the app
+  document.querySelector('.app').innerHTML = `
+    <div style="max-width:420px;margin:4rem auto;text-align:center;padding:0 1.5rem;">
+      <div style="font-size:3rem;margin-bottom:1rem;">💰</div>
+      <h1 style="font-size:1.4rem;font-weight:700;margin-bottom:0.5rem;">Welcome to Nectra</h1>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:0.5rem;">
+        Signed in as <strong>${escHtml(user.email)}</strong>
+      </p>
+      ${errorMsg ? `<p style="color:var(--danger);font-size:13px;margin-bottom:1rem;">${escHtml(errorMsg)}</p>` : ''}
+      <p style="color:var(--muted);font-size:14px;margin-bottom:2rem;">
+        You're not part of a family budget yet. Ask the family owner to share an invite link with you, or sign in with a different account.
+      </p>
+      <button onclick="fbAuth.signOut().then(()=>window.location.reload())"
+        class="btn btn-secondary" style="width:100%;">Sign out and try another account</button>
+    </div>`;
+}
+
+// Renders family members list in Settings
+async function renderFamilyMembers() {
+  const el = document.getElementById('family-members-list');
+  if (!el || !familyRef) return;
+  try {
+    const snap = await familyRef.get();
+    if (!snap.exists) return;
+    const members = snap.data().members || {};
+    const currentUid = fbAuth.currentUser?.uid;
+    el.innerHTML = Object.entries(members).map(([uid, m]) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:14px;font-weight:500;">${escHtml(m.displayName || m.email)}</div>
+          <div style="font-size:12px;color:var(--muted);">${escHtml(m.email)} · ${m.role}</div>
+        </div>
+        ${uid === currentUid ? '<span style="font-size:12px;color:var(--muted);">You</span>' : ''}
+      </div>`).join('');
+  } catch(e) { el.textContent = 'Could not load members.'; }
+}
+
+async function copyInviteLink() {
+  const link = generateInviteLink();
+  try {
+    await navigator.clipboard.writeText(link);
+    const btn = document.getElementById('copy-invite-btn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy invite link'; }, 2000); }
+  } catch(e) {
+    prompt('Copy this invite link:', link);
+  }
 }
 
 // Kick off Firebase initialization when DOM is ready
