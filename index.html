@@ -3437,7 +3437,8 @@ function renderWatchedFoldersList() {
 
 async function scanWatchedFolders() {
   const fileState = getWatchedFileState();
-  const found = [];
+  const pending = [], declined = [], imported = [];
+
   for (const folder of watchedFolders) {
     try {
       const perm = await folder.handle.requestPermission({ mode: 'read' });
@@ -3447,31 +3448,84 @@ async function scanWatchedFolders() {
         const ext = entry.name.split('.').pop().toLowerCase();
         if (!SUPPORTED_EXTS.includes(ext)) continue;
         const key = folder.name + '/' + entry.name;
-        if (fileState[key] === 'imported' || fileState[key] === 'declined') continue;
-        found.push({ folderName: folder.name, fileName: entry.name, key: key, handle: entry, ext: ext });
+        const item = { folderName: folder.name, fileName: entry.name, key, handle: entry, ext };
+        if (fileState[key] === 'imported') imported.push(item);
+        else if (fileState[key] === 'declined') declined.push(item);
+        else pending.push(item);
       }
     } catch(e) { console.warn('Could not scan', folder.name, e); }
   }
-  renderWatchedFilesList(found);
+  renderWatchedFilesList(pending, declined, imported);
 }
 
-function renderWatchedFilesList(files) {
+function renderWatchedFilesList(pending, declined, imported) {
   const el = document.getElementById('watched-files-list');
   if (!el) return;
-  if (!files.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No new files found.</p></div>';
-    return;
+  window._watchedFilesList = pending;
+
+  let html = '';
+
+  // Pending files — Preview & Import / Decline
+  if (pending.length) {
+    html += pending.map(function(f, i) {
+      return '<div id="watched-file-' + i + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap;">' +
+        '<div><div style="font-size:14px;font-weight:500;">' + escHtml(f.fileName) + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);">from ' + escHtml(f.folderName) + '</div></div>' +
+        '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+        '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px;" onclick="previewWatchedFile(' + i + ')">Preview & Import</button>' +
+        '<button class="btn btn-secondary" style="font-size:12px;padding:6px 14px;" onclick="declineWatchedFile(' + JSON.stringify(f.key) + ',' + i + ')">Decline</button>' +
+        '</div></div>';
+    }).join('');
+  } else {
+    html += '<div class="empty-state" style="padding:1.5rem 0;"><div class="icon">📭</div><p>No new files found.</p></div>';
   }
-  window._watchedFilesList = files;
-  el.innerHTML = files.map(function(f, i) {
-    return '<div id="watched-file-' + i + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap;">' +
-      '<div><div style="font-size:14px;font-weight:500;">' + escHtml(f.fileName) + '</div>' +
-      '<div style="font-size:12px;color:var(--muted);">from ' + escHtml(f.folderName) + '</div></div>' +
-      '<div style="display:flex;gap:8px;flex-shrink:0;">' +
-      '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px;" onclick="previewWatchedFile(' + i + ')">Preview & Import</button>' +
-      '<button class="btn btn-secondary" style="font-size:12px;padding:6px 14px;" onclick="declineWatchedFile(' + JSON.stringify(f.key) + ',' + i + ')">Decline</button>' +
+
+  // Declined section — collapsible
+  if (declined.length) {
+    const id = 'watched-declined-body';
+    html += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">' +
+      '<div onclick="toggleWatchedSection(\'' + id + '\')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0;">' +
+      '<span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Declined (' + declined.length + ')</span>' +
+      '<span id="' + id + '-chevron" style="font-size:11px;color:var(--muted);">▶ Show</span></div>' +
+      '<div id="' + id + '" style="display:none;">' +
+      declined.map(function(f) {
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:12px;opacity:0.6;">' +
+          '<div><div style="font-size:13px;font-weight:500;text-decoration:line-through;color:var(--muted);">' + escHtml(f.fileName) + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);">from ' + escHtml(f.folderName) + '</div></div>' +
+          '<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="restoreWatchedFile(' + JSON.stringify(f.key) + ')">Restore</button>' +
+          '</div>';
+      }).join('') +
       '</div></div>';
-  }).join('');
+  }
+
+  // Imported section — collapsible
+  if (imported.length) {
+    const id = 'watched-imported-body';
+    html += '<div style="margin-top:8px;">' +
+      '<div onclick="toggleWatchedSection(\'' + id + '\')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0;">' +
+      '<span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Imported (' + imported.length + ')</span>' +
+      '<span id="' + id + '-chevron" style="font-size:11px;color:var(--muted);">▶ Show</span></div>' +
+      '<div id="' + id + '" style="display:none;">' +
+      imported.map(function(f) {
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:12px;opacity:0.6;">' +
+          '<div><div style="font-size:13px;font-weight:500;color:var(--muted);">' + escHtml(f.fileName) + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);">from ' + escHtml(f.folderName) + ' · Imported</div></div>' +
+          '<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="restoreWatchedFile(' + JSON.stringify(f.key) + ')">Restore</button>' +
+          '</div>';
+      }).join('') +
+      '</div></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function toggleWatchedSection(id) {
+  const body    = document.getElementById(id);
+  const chevron = document.getElementById(id + '-chevron');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display    = open ? 'none' : 'block';
+  chevron.textContent   = open ? '▶ Show' : '▼ Hide';
 }
 
 async function previewWatchedFile(i) {
@@ -3482,8 +3536,6 @@ async function previewWatchedFile(i) {
     const s = getWatchedFileState();
     s[f.key] = 'imported';
     setWatchedFileState(s);
-    const rowEl = document.getElementById('watched-file-' + i);
-    if (rowEl) rowEl.remove();
     routeImportFile(file);
     switchTab('add');
   } catch(e) { alert('Could not read file: ' + e.message); }
@@ -3493,17 +3545,24 @@ function declineWatchedFile(key, i) {
   const s = getWatchedFileState();
   s[key] = 'declined';
   setWatchedFileState(s);
+  // Immediately gray out and cross out the row, swap buttons
   const rowEl = document.getElementById('watched-file-' + i);
   if (rowEl) {
+    rowEl.style.opacity = '0.5';
     rowEl.style.transition = 'opacity 0.2s';
-    rowEl.style.opacity = '0';
-    setTimeout(function() {
-      rowEl.remove();
-      const el = document.getElementById('watched-files-list');
-      if (el && !el.querySelector('[id^="watched-file-"]'))
-        el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No new files found.</p></div>';
-    }, 220);
+    rowEl.innerHTML = rowEl.innerHTML
+      .replace('font-size:14px;font-weight:500;">', 'font-size:14px;font-weight:500;text-decoration:line-through;color:var(--muted);">')
+      .replace(/Preview & Import.*?Decline<\/button>/, '');
+    // Re-scan to update the full list with sections
+    setTimeout(scanWatchedFolders, 300);
   }
+}
+
+function restoreWatchedFile(key) {
+  const s = getWatchedFileState();
+  delete s[key];
+  setWatchedFileState(s);
+  scanWatchedFolders();
 }
 
 // --- Web Share Target ---
