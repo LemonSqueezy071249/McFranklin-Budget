@@ -2813,7 +2813,7 @@ function showQFXPreview(transactions, filename) {
         <input type="checkbox" id="csv-flip-signs" onchange="refreshQFXPreview()" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
         Flip sign on all amounts
       </label>
-      <div style="font-size:12px;color:var(--muted);margin-top:3px;">Use this if your bank exports expenses as positive and credits as negative.</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:3px;">Use this if your bank exports expenses as negative and credits as positive.</div>
     </div>`;
 
   document.getElementById('csv-row-count').textContent =
@@ -2951,7 +2951,7 @@ function showCSVMapper() {
       <input type="checkbox" id="csv-flip-signs" onchange="updateCSVPreview()" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
       Flip sign on all amounts
     </label>
-    <div style="font-size:12px;color:var(--muted);margin-top:3px;">Use this if your bank exports expenses as positive and credits as negative.</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px;">Use this if your bank exports expenses as negative and credits as positive.</div>
   </div>`;
   document.getElementById('csv-map-grid').innerHTML = html;
 
