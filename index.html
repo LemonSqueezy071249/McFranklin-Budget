@@ -418,12 +418,12 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
-    <button class="tab" onclick="switchTab('expenses')">Transactions</button>
-    <button class="tab" onclick="switchTab('add')">Add Transaction</button>
-    <button class="tab" onclick="switchTab('budget')">Budget</button>
-    <button class="tab" onclick="switchTab('rules')">Rules</button>
-    <button class="tab" onclick="switchTab('settings')">Settings</button>
+    <button class="tab active" onclick="switchTab('dashboard',this)">Dashboard</button>
+    <button class="tab" onclick="switchTab('expenses',this)">Transactions</button>
+    <button class="tab" onclick="switchTab('add',this)">Add Transaction</button>
+    <button class="tab" onclick="switchTab('budget',this)">Budget</button>
+    <button class="tab" onclick="switchTab('rules',this)">Rules</button>
+    <button class="tab" onclick="switchTab('settings',this)">Settings</button>
   </div>
 
   <div id="tab-dashboard" class="panel active">
@@ -1188,11 +1188,20 @@ function setTodayDate() {
 
 // --- Tabs ------------------------------------------------------------
 // Shows the selected panel and highlights the active tab button.
-function switchTab(name) {
+function switchTab(name, clickedEl) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
+  // Highlight the clicked tab button — works both from onclick and programmatic calls
+  if (clickedEl) {
+    clickedEl.classList.add('active');
+  } else {
+    document.querySelectorAll('.tab').forEach(t => {
+      if (t.getAttribute('onclick') && t.getAttribute('onclick').includes("'" + name + "'")) {
+        t.classList.add('active');
+      }
+    });
+  }
   if (name === 'add') scanWatchedFolders();
 }
 
@@ -3473,7 +3482,7 @@ function renderWatchedFilesList(pending, declined, imported) {
         '<div style="font-size:12px;color:var(--muted);">from ' + escHtml(f.folderName) + '</div></div>' +
         '<div style="display:flex;gap:8px;flex-shrink:0;">' +
         '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px;" onclick="previewWatchedFile(' + i + ')">Preview & Import</button>' +
-        '<button class="btn btn-secondary" style="font-size:12px;padding:6px 14px;" onclick="declineWatchedFile(' + JSON.stringify(f.key) + ',' + i + ')">Decline</button>' +
+        '<button class="btn btn-secondary" style="font-size:12px;padding:6px 14px;" data-key="' + escHtml(f.key) + '" data-idx="' + i + '" onclick="declineWatchedFile(this.dataset.key,this.dataset.idx)">Decline</button>' +
         '</div></div>';
     }).join('');
   } else {
@@ -3492,7 +3501,7 @@ function renderWatchedFilesList(pending, declined, imported) {
         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:12px;opacity:0.6;">' +
           '<div><div style="font-size:13px;font-weight:500;text-decoration:line-through;color:var(--muted);">' + escHtml(f.fileName) + '</div>' +
           '<div style="font-size:11px;color:var(--muted);">from ' + escHtml(f.folderName) + '</div></div>' +
-          '<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="restoreWatchedFile(' + JSON.stringify(f.key) + ')">Restore</button>' +
+          '<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" data-key=" + JSON.stringify(f.key) + " onclick="restoreWatchedFile(this.dataset.key)">Restore</button>' +
           '</div>';
       }).join('') +
       '</div></div>';
@@ -3510,7 +3519,7 @@ function renderWatchedFilesList(pending, declined, imported) {
         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:12px;opacity:0.6;">' +
           '<div><div style="font-size:13px;font-weight:500;color:var(--muted);">' + escHtml(f.fileName) + '</div>' +
           '<div style="font-size:11px;color:var(--muted);">from ' + escHtml(f.folderName) + ' · Imported</div></div>' +
-          '<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="restoreWatchedFile(' + JSON.stringify(f.key) + ')">Restore</button>' +
+          '<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" data-key=" + JSON.stringify(f.key) + " onclick="restoreWatchedFile(this.dataset.key)">Restore</button>' +
           '</div>';
       }).join('') +
       '</div></div>';
