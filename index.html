@@ -84,6 +84,11 @@
   .tab.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
   .panel { display: none; }
   .panel.active { display: block; }
+  /* Constrain content width on non-dashboard tabs */
+  #tab-expenses.active, #tab-add.active, #tab-watched.active,
+  #tab-rules.active, #tab-budget.active, #tab-settings.active {
+    max-width: 860px;
+  }
   .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 1.75rem; }
   .summary-card { background: var(--surface); border-radius: var(--radius); padding: 1.1rem 1.25rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, transform 0.2s; }
   .summary-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
