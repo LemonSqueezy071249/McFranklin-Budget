@@ -2758,6 +2758,7 @@ function showQFXPreview(transactions, filename) {
 
   const fallbackEl = document.getElementById('csv-cat-col');
   const fallback = fallbackEl?.value || 'Uncategorized';
+  const flipSigns = document.getElementById('csv-flip-signs')?.checked || false;
 
   let autoCount = 0, deleteCount = 0, uncatCount = 0;
 
@@ -2774,9 +2775,10 @@ function showQFXPreview(transactions, filename) {
       uncatCount++;
       categoryCell = `<td><span style="background:var(--warn-light);color:var(--warn);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;">${escHtml(fallback)}</span></td>`;
     }
-    const isNeg = t.amount < 0;
+    const amount = flipSigns ? -t.amount : t.amount;
+    const isNeg = amount < 0;
     const amtStyle = isNeg ? 'color:var(--green-dark)' : '';
-    const amtDisplay = isNeg ? `-$${fmt(Math.abs(t.amount))}` : `$${fmt(t.amount)}`;
+    const amtDisplay = isNeg ? `-$${fmt(Math.abs(amount))}` : `$${fmt(amount)}`;
     return `<tr>
       <td class="date-col">${t.date}</td>
       <td>${escHtml(t.name)}</td>
@@ -2797,7 +2799,7 @@ function showQFXPreview(transactions, filename) {
   document.getElementById('csv-success').style.display = 'none';
   document.getElementById('csv-map-grid').innerHTML = `
     <div class="csv-map-full" style="padding:8px 12px;background:var(--accent-light);border-radius:var(--radius-sm);font-size:13px;color:var(--accent);font-weight:500;">
-      QFX/OFX file detected — columns mapped automatically from <strong>${escHtml(filename)}</strong>
+      QFX/OFX file detected — columns mapped automatically${filename ? ` from <strong>${escHtml(filename)}</strong>` : ''}
     </div>
     <div class="csv-map-full">
       <label class="field-label" style="font-size:11px;">Fallback category</label>
@@ -2805,6 +2807,13 @@ function showQFXPreview(transactions, filename) {
         <option value="Uncategorized" selected>Uncategorized (recommended)</option>
         ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
       </select>
+    </div>
+    <div class="csv-map-full">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin-top:4px;">
+        <input type="checkbox" id="csv-flip-signs" onchange="refreshQFXPreview()" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
+        Flip sign on all amounts
+      </label>
+      <div style="font-size:12px;color:var(--muted);margin-top:3px;">Use this if your bank exports expenses as positive and credits as negative.</div>
     </div>`;
 
   document.getElementById('csv-row-count').textContent =
@@ -2828,6 +2837,7 @@ function refreshQFXPreview() {
 // Imports the already-parsed QFX transactions into state
 async function importQFX() {
   const fallback = document.getElementById('csv-cat-col')?.value || 'Uncategorized';
+  const flipSigns = document.getElementById('csv-flip-signs')?.checked || false;
   const importBtn = document.getElementById('import-btn');
   const cancelBtn = document.getElementById('cancel-btn');
   if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing...'; }
@@ -2840,10 +2850,11 @@ async function importQFX() {
     const match = applyRules(t.name);
     if (match === '__delete__') { deleted++; continue; }
     if (match) autoCat++;
-    if (t.amount < 0) refunds++;
+    const amount = flipSigns ? -t.amount : t.amount;
+    if (amount < 0) refunds++;
     newTransactions.push({
       date: t.date,
-      amount: t.amount,
+      amount: amount,
       category: match || fallback,
       description: t.name,
       memo: t.memo || '',
