@@ -593,7 +593,7 @@
 
   <!-- WATCHED FOLDERS -->
   <div id="tab-watched" class="panel">
-    <div id="watched-unsupported" style="display:none;" class="form-card">
+    <div id="watched-unsupported" style="display:none;" class="settings-section">
       <div style="text-align:center; padding:1rem 0;">
         <div style="font-size:2.5rem; margin-bottom:0.75rem;">📁</div>
         <h2 style="margin-bottom:0.5rem;">Watched Folders</h2>
@@ -604,20 +604,19 @@
     </div>
 
     <div id="watched-supported" style="display:none;">
-      <div class="form-card" style="margin-bottom:1.5rem;">
-        <h2 style="margin-bottom:0.5rem;">Watched Folders</h2>
-        <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Add folders to watch for new import files (CSV, QFX, OFX, QBO). Each time you open the app, Nectra checks for new files automatically.</p>
+      <div class="settings-section" style="margin-bottom:1.5rem;">
+        <h2 style="margin-bottom:0.25rem;">Watched Folders</h2>
+        <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Add folders to watch for new import files (CSV, QFX, OFX, QBO). Nectra checks automatically each time you open this tab.</p>
         <button class="btn btn-secondary" onclick="addWatchedFolder()" style="font-size:13px;">+ Add folder</button>
         <div id="watched-folders-list" style="margin-top:1rem;"></div>
       </div>
 
-      <div class="form-card">
-        <h2 style="margin-bottom:0.5rem;">Ready to Import</h2>
+      <div class="settings-section">
+        <h2 style="margin-bottom:0.25rem;">Ready to Import</h2>
         <p class="text-sm text-muted" style="margin-bottom:1rem;">Files found in your watched folders that haven't been imported yet.</p>
         <div id="watched-files-list">
           <div class="empty-state"><div class="icon">📭</div><p>No new files found.</p></div>
         </div>
-        <button class="btn btn-secondary" style="font-size:13px; margin-top:1rem;" onclick="scanWatchedFolders()">Check now</button>
       </div>
     </div>
   </div>
@@ -1201,6 +1200,7 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   event.currentTarget.classList.add('active');
+  if (name === 'watched') scanWatchedFolders();
 }
 
 // --- Period ----------------------------------------------------------
