@@ -3545,17 +3545,7 @@ function declineWatchedFile(key, i) {
   const s = getWatchedFileState();
   s[key] = 'declined';
   setWatchedFileState(s);
-  // Immediately gray out and cross out the row, swap buttons
-  const rowEl = document.getElementById('watched-file-' + i);
-  if (rowEl) {
-    rowEl.style.opacity = '0.5';
-    rowEl.style.transition = 'opacity 0.2s';
-    rowEl.innerHTML = rowEl.innerHTML
-      .replace('font-size:14px;font-weight:500;">', 'font-size:14px;font-weight:500;text-decoration:line-through;color:var(--muted);">')
-      .replace(/Preview & Import.*?Decline<\/button>/, '');
-    // Re-scan to update the full list with sections
-    setTimeout(scanWatchedFolders, 300);
-  }
+  scanWatchedFolders();
 }
 
 function restoreWatchedFile(key) {
