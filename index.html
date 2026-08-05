@@ -421,6 +421,7 @@
     <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
     <button class="tab" onclick="switchTab('expenses')">Transactions</button>
     <button class="tab" onclick="switchTab('add')">Add Transaction</button>
+    <button class="tab" onclick="switchTab('watched')">Watched Folders</button>
     <button class="tab" onclick="switchTab('budget')">Budget</button>
     <button class="tab" onclick="switchTab('rules')">Rules</button>
     <button class="tab" onclick="switchTab('settings')">Settings</button>
@@ -585,6 +586,39 @@
         <div id="csv-status" class="status-msg"></div>
       </div>
       <div id="csv-success" style="display:none; margin-top:1rem;"></div>
+    </div>
+  </div>
+
+  </div>
+
+  <!-- WATCHED FOLDERS -->
+  <div id="tab-watched" class="panel">
+    <div id="watched-unsupported" style="display:none;" class="form-card">
+      <div style="text-align:center; padding:1rem 0;">
+        <div style="font-size:2.5rem; margin-bottom:0.75rem;">📁</div>
+        <h2 style="margin-bottom:0.5rem;">Watched Folders</h2>
+        <p class="text-sm text-muted" style="max-width:360px; margin:0 auto 1rem;">
+          Watched Folders requires Chrome on desktop or Android. On iPhone, use the <strong>Share</strong> button in any app to send a file directly to Nectra for import.
+        </p>
+      </div>
+    </div>
+
+    <div id="watched-supported" style="display:none;">
+      <div class="form-card" style="margin-bottom:1.5rem;">
+        <h2 style="margin-bottom:0.5rem;">Watched Folders</h2>
+        <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Add folders to watch for new import files (CSV, QFX, OFX, QBO). Each time you open the app, Nectra checks for new files automatically.</p>
+        <button class="btn btn-secondary" onclick="addWatchedFolder()" style="font-size:13px;">+ Add folder</button>
+        <div id="watched-folders-list" style="margin-top:1rem;"></div>
+      </div>
+
+      <div class="form-card">
+        <h2 style="margin-bottom:0.5rem;">Ready to Import</h2>
+        <p class="text-sm text-muted" style="margin-bottom:1rem;">Files found in your watched folders that haven't been imported yet.</p>
+        <div id="watched-files-list">
+          <div class="empty-state"><div class="icon">📭</div><p>No new files found.</p></div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:13px; margin-top:1rem;" onclick="scanWatchedFolders()">Check now</button>
+      </div>
     </div>
   </div>
 
@@ -1146,6 +1180,8 @@ function initApp() {
   populatePrefsUI();
   updatePeriodLabel();
   syncPeriodButtons();
+  initWatchedFolders();
+  checkForSharedFile();
 }
 
 function setTodayDate() {
@@ -2092,10 +2128,19 @@ function openEdit(idx) {
     <button class="btn btn-secondary" style="font-size:13px; padding:7px 16px;" onclick="closeEdit(${idx})">Cancel</button>
   </div>`;
 
-  // Initialize searchable select for category
+  // Initialize searchable select for category, then conditionally focus it
   setTimeout(() => {
     initDynamicSearchableSelects(`edit-cat-${idx}`);
-  }, 0);
+
+    // Only auto-focus and clear the category if the transaction is currently uncategorized
+    const e = state.expenses[idx];
+    const knownCats = new Set(state.categories.map(c => c.name));
+    const isUncat = !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
+    if (isUncat) {
+      const searchInput = document.querySelector(`#edit-cat-${idx}-container .cat-search-input`);
+      if (searchInput) { searchInput.value = ''; searchInput.focus(); }
+    }
+  }, 50);
 
   row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -3304,6 +3349,189 @@ async function saveFilters() {
 }
 
 
+// --- Watched Folders ---
+// Uses the File System Access API (Chrome desktop + Android only).
+// Folder handles are stored in IndexedDB; imported/declined state in localStorage.
+
+const WATCHED_DB_NAME  = 'nectra-watched';
+const WATCHED_DB_STORE = 'folders';
+const SUPPORTED_EXTS   = ['csv', 'qfx', 'ofx', 'qbo'];
+
+let watchedFolders = [];
+
+function openWatchedDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(WATCHED_DB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(WATCHED_DB_STORE, { keyPath: 'name' });
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+async function saveWatchedFoldersToDB() {
+  const idb   = await openWatchedDB();
+  const tx    = idb.transaction(WATCHED_DB_STORE, 'readwrite');
+  const store = tx.objectStore(WATCHED_DB_STORE);
+  store.clear();
+  for (const f of watchedFolders) store.put({ name: f.name, handle: f.handle });
+}
+
+async function loadWatchedFoldersFromDB() {
+  const idb   = await openWatchedDB();
+  const tx    = idb.transaction(WATCHED_DB_STORE, 'readonly');
+  const store = tx.objectStore(WATCHED_DB_STORE);
+  return new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+function getWatchedFileState() {
+  try { return JSON.parse(localStorage.getItem('watched_file_state') || '{}'); } catch(e) { return {}; }
+}
+function setWatchedFileState(s) { localStorage.setItem('watched_file_state', JSON.stringify(s)); }
+
+async function initWatchedFolders() {
+  const supported = 'showDirectoryPicker' in window;
+  document.getElementById('watched-unsupported').style.display = supported ? 'none' : 'block';
+  document.getElementById('watched-supported').style.display   = supported ? 'block' : 'none';
+  if (!supported) return;
+  try {
+    const saved = await loadWatchedFoldersFromDB();
+    watchedFolders = saved;
+    renderWatchedFoldersList();
+    await scanWatchedFolders();
+  } catch(e) { console.warn('Could not load watched folders', e); }
+}
+
+async function addWatchedFolder() {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'read' });
+    if (watchedFolders.some(f => f.name === handle.name)) {
+      alert(handle.name + ' is already being watched.'); return;
+    }
+    watchedFolders.push({ name: handle.name, handle });
+    await saveWatchedFoldersToDB();
+    renderWatchedFoldersList();
+    await scanWatchedFolders();
+  } catch(e) { if (e.name !== 'AbortError') console.warn('addWatchedFolder:', e); }
+}
+
+function removeWatchedFolder(name) {
+  if (!confirm('Stop watching ' + name + '?')) return;
+  watchedFolders = watchedFolders.filter(f => f.name !== name);
+  saveWatchedFoldersToDB();
+  renderWatchedFoldersList();
+  renderWatchedFilesList([]);
+}
+
+function renderWatchedFoldersList() {
+  const el = document.getElementById('watched-folders-list');
+  if (!el) return;
+  if (!watchedFolders.length) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--muted);">No folders added yet.</p>';
+    return;
+  }
+  el.innerHTML = watchedFolders.map(function(f) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">' +
+      '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.2rem;">📁</span>' +
+      '<span style="font-size:14px;font-weight:500;">' + escHtml(f.name) + '</span></div>' +
+      '<button class="del-btn" onclick="removeWatchedFolder(' + JSON.stringify(f.name) + ')">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function scanWatchedFolders() {
+  const fileState = getWatchedFileState();
+  const found = [];
+  for (const folder of watchedFolders) {
+    try {
+      const perm = await folder.handle.requestPermission({ mode: 'read' });
+      if (perm !== 'granted') continue;
+      for await (const entry of folder.handle.values()) {
+        if (entry.kind !== 'file') continue;
+        const ext = entry.name.split('.').pop().toLowerCase();
+        if (!SUPPORTED_EXTS.includes(ext)) continue;
+        const key = folder.name + '/' + entry.name;
+        if (fileState[key] === 'imported' || fileState[key] === 'declined') continue;
+        found.push({ folderName: folder.name, fileName: entry.name, key: key, handle: entry, ext: ext });
+      }
+    } catch(e) { console.warn('Could not scan', folder.name, e); }
+  }
+  renderWatchedFilesList(found);
+}
+
+function renderWatchedFilesList(files) {
+  const el = document.getElementById('watched-files-list');
+  if (!el) return;
+  if (!files.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No new files found.</p></div>';
+    return;
+  }
+  window._watchedFilesList = files;
+  el.innerHTML = files.map(function(f, i) {
+    return '<div id="watched-file-' + i + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap;">' +
+      '<div><div style="font-size:14px;font-weight:500;">' + escHtml(f.fileName) + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);">from ' + escHtml(f.folderName) + '</div></div>' +
+      '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+      '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px;" onclick="previewWatchedFile(' + i + ')">Preview & Import</button>' +
+      '<button class="btn btn-secondary" style="font-size:12px;padding:6px 14px;" onclick="declineWatchedFile(' + JSON.stringify(f.key) + ',' + i + ')">Decline</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+async function previewWatchedFile(i) {
+  const f = window._watchedFilesList && window._watchedFilesList[i];
+  if (!f) return;
+  try {
+    const file = await f.handle.getFile();
+    const s = getWatchedFileState();
+    s[f.key] = 'imported';
+    setWatchedFileState(s);
+    const rowEl = document.getElementById('watched-file-' + i);
+    if (rowEl) rowEl.remove();
+    routeImportFile(file);
+    switchTab('add');
+  } catch(e) { alert('Could not read file: ' + e.message); }
+}
+
+function declineWatchedFile(key, i) {
+  const s = getWatchedFileState();
+  s[key] = 'declined';
+  setWatchedFileState(s);
+  const rowEl = document.getElementById('watched-file-' + i);
+  if (rowEl) {
+    rowEl.style.transition = 'opacity 0.2s';
+    rowEl.style.opacity = '0';
+    setTimeout(function() {
+      rowEl.remove();
+      const el = document.getElementById('watched-files-list');
+      if (el && !el.querySelector('[id^="watched-file-"]'))
+        el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No new files found.</p></div>';
+    }, 220);
+  }
+}
+
+// --- Web Share Target ---
+function checkForSharedFile() {
+  if (!window.location.search.includes('share-target')) return;
+  const sharedData = sessionStorage.getItem('shared-file-pending');
+  if (!sharedData) return;
+  sessionStorage.removeItem('shared-file-pending');
+  try {
+    const info = JSON.parse(sharedData);
+    if (info.url) {
+      fetch(info.url).then(function(r) { return r.blob(); }).then(function(blob) {
+        const file = new File([blob], info.name || 'shared.csv', { type: blob.type });
+        routeImportFile(file);
+        switchTab('add');
+      });
+    }
+  } catch(e) { console.warn('Share target handling failed', e); }
+  window.history.replaceState({}, '', window.location.pathname);
+}
+
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 // fmt: formats a number as a 2-decimal dollar amount string (no $ sign).
@@ -3312,7 +3540,14 @@ function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US', {minimumFrac
 // --- PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+  // Listen for shared files from the service worker
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'share-target') {
+      sessionStorage.setItem('shared-file-pending', event.data.payload);
+      checkForSharedFile();
+    }
   });
 }
 
