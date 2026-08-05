@@ -1517,7 +1517,8 @@ function getExpFilteredExpenses() {
       if (state.expPeriod === 'custom'    && !(d.getMonth()===state.expMonth&&d.getFullYear()===state.expYear)) return false;
     }
     if (state.expFilter === '__uncategorized__') {
-      return !e.category || e.category === 'Uncategorized' || !knownCats.has(e.category);
+      // Only truly uncategorized — no category set at all
+      return !e.category || e.category === 'Uncategorized';
     }
     if (state.expFilter && state.expFilter.startsWith('__category__:')) {
       const cat = state.expFilter.slice('__category__:'.length);
@@ -1672,6 +1673,53 @@ function renderDashboard() {
     html += '</div>';
   });
   document.getElementById('categories-view').innerHTML = html || '<div class="empty-state"><div class="icon">📊</div><p>No categories yet - add some in Budget.</p></div>';
+
+  // Build "Other" section — retired categories + truly uncategorized
+  const knownCatNames = new Set(state.categories.map(c => c.name));
+  const otherTx = filtered.filter(e =>
+    !e.category || e.category === 'Uncategorized' || !knownCatNames.has(e.category)
+  );
+
+  if (otherTx.length > 0) {
+    const otherTotal = otherTx.reduce((s, e) => s + (parseFloat(e.amount)||0), 0);
+    // Group by label
+    const byLabel = {};
+    otherTx.forEach(e => {
+      const label = (!e.category || e.category === 'Uncategorized') ? '⚑ Uncategorized' : e.category;
+      if (!byLabel[label]) byLabel[label] = { count: 0, total: 0, retired: !!e.category && e.category !== 'Uncategorized' };
+      byLabel[label].count++;
+      byLabel[label].total += parseFloat(e.amount)||0;
+    });
+
+    const rows = Object.entries(byLabel).map(([label, info]) => `
+      <div class="cat-row" style="opacity:0.75;" onclick="drillDownToCategory('${escHtml(info.retired ? label : '')}')">
+        <div class="cat-name">
+          <span style="cursor:${info.retired?'pointer':'default'};${info.retired?'':'color:var(--warn)'}">${escHtml(label)}</span>
+          <div class="sub">${info.count} transaction${info.count!==1?'s':''} · no budget set</div>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar" style="opacity:0.3"><div class="progress-fill ok" style="width:0%"></div></div><div class="progress-pct">—</div></div>
+        <div class="cat-budget" style="color:var(--muted)">—</div>
+        <div class="cat-spent">$${fmt(info.total)}</div>
+        <div class="cat-remain" style="color:var(--muted)">—</div>
+      </div>`).join('');
+
+    const otherId = 'dashboard-other-body';
+    const otherSection = document.createElement('div');
+    otherSection.style.marginTop = '1rem';
+    otherSection.innerHTML = `
+      <div onclick="document.getElementById('${otherId}').style.display=document.getElementById('${otherId}').style.display==='none'?'block':'none';this.querySelector('.other-chevron').textContent=document.getElementById('${otherId}').style.display==='none'?'▶':'▼';"
+        style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:6px 8px;border-radius:var(--radius-sm);background:var(--surface-2);">
+        <span style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:700;">
+          Other / Unbudgeted
+          <span style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:6px;">$${fmt(otherTotal)} · ${otherTx.length} transaction${otherTx.length!==1?'s':''}</span>
+        </span>
+        <span class="other-chevron" style="font-size:11px;color:var(--muted);">▶</span>
+      </div>
+      <div id="${otherId}" style="display:none;">${rows}</div>`;
+    const catView = document.getElementById('categories-view');
+    if (catView) catView.appendChild(otherSection);
+  }
+
   renderDashboardSidebar(filtered, visibleCats);
 }
 
@@ -3319,10 +3367,26 @@ function renderBudgetEditor() {
 }
 
 function updateCat(i, key, val) {
+  if (key === 'name' && val && val !== state.categories[i].name) {
+    // Rename all transactions that use the old category name
+    const oldName = state.categories[i].name;
+    if (oldName) {
+      state.expenses.forEach(e => { if (e.category === oldName) e.category = val; });
+      localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+      // Sync expenses in background
+      if (state.connected) db.saveExpenses(state.expenses).catch(() => {});
+    }
+  }
   state.categories[i][key] = key === 'budget' ? parseFloat(val)||0 : val;
 }
+
 function removeCat(i) {
-  if (!confirm('Remove this budget item?')) return;
+  const name = state.categories[i].name || 'this item';
+  const txCount = state.expenses.filter(e => e.category === name).length;
+  const msg = txCount > 0
+    ? `Remove "${name}" from your budget?\n\n${txCount} transaction${txCount!==1?'s':''} tagged "${name}" will keep their label and appear in an "Other" section on the dashboard. You can re-add this category at any time.`
+    : `Remove "${name}" from your budget?`;
+  if (!confirm(msg)) return;
   state.categories.splice(i, 1);
   renderBudgetEditor();
 }
