@@ -84,11 +84,6 @@
   .tab.active { color: var(--accent); background: var(--accent-light); font-weight: 600; }
   .panel { display: none; }
   .panel.active { display: block; }
-  /* Constrain content width on non-dashboard tabs */
-  #tab-expenses.active, #tab-add.active, #tab-watched.active,
-  #tab-rules.active, #tab-budget.active, #tab-settings.active {
-    max-width: 860px;
-  }
   .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 1.75rem; }
   .summary-card { background: var(--surface); border-radius: var(--radius); padding: 1.1rem 1.25rem; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, transform 0.2s; }
   .summary-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
@@ -426,7 +421,6 @@
     <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
     <button class="tab" onclick="switchTab('expenses')">Transactions</button>
     <button class="tab" onclick="switchTab('add')">Add Transaction</button>
-    <button class="tab" onclick="switchTab('watched')">Watched Folders</button>
     <button class="tab" onclick="switchTab('budget')">Budget</button>
     <button class="tab" onclick="switchTab('rules')">Rules</button>
     <button class="tab" onclick="switchTab('settings')">Settings</button>
@@ -592,31 +586,25 @@
       </div>
       <div id="csv-success" style="display:none; margin-top:1rem;"></div>
     </div>
-  </div>
 
-  </div>
-
-  <!-- WATCHED FOLDERS -->
-  <div id="tab-watched" class="panel">
-    <div id="watched-unsupported" style="display:none;" class="settings-section">
-      <div style="text-align:center; padding:1rem 0;">
-        <div style="font-size:2.5rem; margin-bottom:0.75rem;">📁</div>
-        <h2 style="margin-bottom:0.5rem;">Watched Folders</h2>
-        <p class="text-sm text-muted" style="max-width:360px; margin:0 auto 1rem;">
-          Watched Folders requires Chrome on desktop or Android. On iPhone, use the <strong>Share</strong> button in any app to send a file directly to Nectra for import.
-        </p>
+    <!-- Watched Folders — inline below import section -->
+    <div id="watched-unsupported" style="display:none;" class="form-card">
+      <div style="text-align:center; padding:0.5rem 0;">
+        <div style="font-size:1.5rem; margin-bottom:0.5rem;">📁</div>
+        <h2 style="margin-bottom:0.25rem; font-size:1rem;">Watched Folders</h2>
+        <p class="text-sm text-muted">Requires Chrome on desktop or Android. On iPhone, use the Share button to send files directly to Nectra.</p>
       </div>
     </div>
 
     <div id="watched-supported" style="display:none;">
-      <div class="settings-section" style="margin-bottom:1.5rem;">
+      <div class="form-card" style="margin-bottom:1rem;">
         <h2 style="margin-bottom:0.25rem;">Watched Folders</h2>
-        <p class="text-sm text-muted" style="margin-bottom:1.25rem;">Add folders to watch for new import files (CSV, QFX, OFX, QBO). Nectra checks automatically each time you open this tab.</p>
+        <p class="text-sm text-muted" style="margin-bottom:1rem;">Nectra checks these folders for new files automatically when you open Add Transaction.</p>
         <button class="btn btn-secondary" onclick="addWatchedFolder()" style="font-size:13px;">+ Add folder</button>
         <div id="watched-folders-list" style="margin-top:1rem;"></div>
       </div>
 
-      <div class="settings-section">
+      <div class="form-card">
         <h2 style="margin-bottom:0.25rem;">Ready to Import</h2>
         <p class="text-sm text-muted" style="margin-bottom:1rem;">Files found in your watched folders that haven't been imported yet.</p>
         <div id="watched-files-list">
@@ -1205,7 +1193,7 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   event.currentTarget.classList.add('active');
-  if (name === 'watched') scanWatchedFolders();
+  if (name === 'add') scanWatchedFolders();
 }
 
 // --- Period ----------------------------------------------------------
