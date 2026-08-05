@@ -322,12 +322,25 @@
     #search-input { width: 100% !important; max-width: 100% !important; }
   }
   /* ── Sign-in screen ── */
-  #signin-screen { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; z-index:1000; }
-  #signin-screen h1 { font-size:1.6rem; font-weight:700; letter-spacing:-0.03em; background:linear-gradient(135deg,var(--accent) 0%,#9B59D0 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-  #signin-screen p { color:var(--muted); font-size:14px; max-width:280px; text-align:center; line-height:1.6; }
-  .signin-btn { display:flex; align-items:center; gap:10px; background:white; border:1.5px solid var(--border-strong); border-radius:var(--radius); padding:12px 20px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:var(--shadow); transition:all .2s; font-family:var(--sans); color:var(--text); }
+  #signin-screen { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; z-index:1000; padding:1.5rem; }
+  .landing-card { background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); padding:2.5rem 2rem; max-width:420px; width:100%; text-align:center; }
+  .landing-icon { width:80px; height:80px; border-radius:20px; box-shadow:0 6px 24px rgba(88,86,214,0.25); margin:0 auto 1.25rem; display:block; }
+  .landing-title { font-size:1.75rem; font-weight:700; letter-spacing:-0.03em; background:linear-gradient(135deg,var(--accent) 0%,#9B59D0 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:0.5rem; }
+  .landing-sub { color:var(--muted); font-size:14px; line-height:1.6; margin-bottom:1.75rem; }
+  .landing-features { display:flex; flex-direction:column; gap:10px; margin-bottom:1.75rem; text-align:left; }
+  .landing-feature { display:flex; align-items:center; gap:12px; font-size:14px; color:var(--text-2); }
+  .landing-feature-icon { font-size:1.2rem; flex-shrink:0; width:28px; text-align:center; }
+  .signin-btn { display:inline-flex; align-items:center; gap:10px; background:white; border:1.5px solid var(--border-strong); border-radius:var(--radius); padding:12px 20px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:var(--shadow); transition:all .2s; font-family:var(--sans); color:var(--text); width:100%; justify-content:center; }
   .signin-btn:hover { box-shadow:var(--shadow-lg); transform:translateY(-1px); }
   .signin-btn img { width:20px; height:20px; }
+
+  /* Onboarding screen */
+  #onboarding-screen { position:fixed; inset:0; background:var(--bg); display:none; align-items:center; justify-content:center; z-index:1000; padding:1.5rem; overflow-y:auto; }
+  .onboarding-card { background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); padding:2rem; max-width:480px; width:100%; }
+  .onboarding-card h2 { font-size:1.2rem; font-weight:700; margin-bottom:0.35rem; letter-spacing:-0.02em; }
+  .onboarding-card p { font-size:13px; color:var(--muted); margin-bottom:1.25rem; line-height:1.6; }
+  .onboarding-divider { display:flex; align-items:center; gap:12px; margin:1.25rem 0; color:var(--muted); font-size:13px; }
+  .onboarding-divider::before, .onboarding-divider::after { content:''; flex:1; height:1px; background:var(--border); }
   #app-root { display:none; }
 
   /* Splash/loading screen — shown immediately, hides once auth resolves */
@@ -394,14 +407,66 @@
 
 <!-- Sign-in screen (shown only when not authenticated) -->
 <div id="signin-screen" style="display:none;">
-  <img src="icons/icon-512.png" style="width:72px;height:72px;border-radius:18px;box-shadow:0 4px 16px rgba(88,86,214,0.2);" alt="Nectra">
-  <h1>Nectra</h1>
-  <p>Sign in with your Google account to access the family budget.</p>
-  <button class="signin-btn" onclick="signInWithGoogle()">
-    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
-    Sign in with Google
-  </button>
-  <p style="font-size:12px; color:var(--muted);">Only jehffranklen@gmail.com and mlmcginty93@gmail.com have access.</p>
+  <div class="landing-card">
+    <img src="icons/icon-512.png" class="landing-icon" alt="Nectra">
+    <div class="landing-title">Nectra</div>
+    <p class="landing-sub">Track your family budget together,<br>in real time.</p>
+    <div class="landing-features">
+      <div class="landing-feature"><span class="landing-feature-icon">📊</span> Dashboard with budget progress by category</div>
+      <div class="landing-feature"><span class="landing-feature-icon">🔄</span> Real-time sync between family members</div>
+      <div class="landing-feature"><span class="landing-feature-icon">📥</span> Import from CSV, QFX, OFX and more</div>
+      <div class="landing-feature"><span class="landing-feature-icon">🏷️</span> Auto-categorize with import rules</div>
+    </div>
+    <button class="signin-btn" onclick="signInWithGoogle()">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+      Continue with Google
+    </button>
+    <p style="font-size:12px;color:var(--muted);margin-top:1rem;line-height:1.5;">By signing in you agree to use this app responsibly. Your data is stored securely in Firebase and shared only with your family members.</p>
+  </div>
+</div>
+
+<!-- Onboarding screen: shown after sign-in if user has no family yet -->
+<div id="onboarding-screen">
+  <div style="max-width:480px;width:100%;">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <img src="icons/icon-512.png" style="width:56px;height:56px;border-radius:14px;box-shadow:0 4px 16px rgba(88,86,214,0.2);" alt="Nectra">
+      <div style="font-size:1.3rem;font-weight:700;margin-top:0.75rem;letter-spacing:-0.02em;">Welcome to Nectra</div>
+      <div id="onboarding-user-email" style="font-size:13px;color:var(--muted);margin-top:4px;"></div>
+    </div>
+
+    <div id="onboarding-error" style="display:none;background:var(--danger-light);color:var(--danger);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:1rem;"></div>
+
+    <!-- Create new family -->
+    <div class="onboarding-card" style="margin-bottom:1rem;">
+      <h2>Create a family budget</h2>
+      <p>Start fresh. You'll be the owner and can invite family members from Settings.</p>
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="field-label">Family name</label>
+        <input type="text" id="new-family-name" placeholder="e.g. The Smith Family" maxlength="60">
+      </div>
+      <button class="btn btn-primary" style="width:100%;" onclick="createNewFamily()">Create family budget</button>
+    </div>
+
+    <div class="onboarding-divider">or</div>
+
+    <!-- Join via invite -->
+    <div class="onboarding-card" style="margin-bottom:1rem;">
+      <h2>Join an existing family</h2>
+      <p>Have an invite link? Paste it below. Or ask your family's budget owner to share one from their Settings tab.</p>
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label class="field-label">Invite link</label>
+        <input type="url" id="invite-link-input" placeholder="https://lemonsqueezy071249.github.io/...?invite=...">
+      </div>
+      <button class="btn btn-secondary" style="width:100%;" onclick="joinViaInviteInput()">Join family</button>
+    </div>
+
+    <div style="text-align:center;">
+      <button onclick="fbAuth.signOut().then(()=>window.location.reload())"
+        style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted);font-family:var(--sans);">
+        Sign out and use a different account
+      </button>
+    </div>
+  </div>
 </div>
 
 <div id="app-root">
@@ -1061,27 +1126,118 @@ async function joinFamilyViaInvite(user, familyId) {
 }
 
 function showNoFamilyScreen(user, errorMsg) {
-  const signinScreen = document.getElementById('signin-screen');
-  const appRoot = document.getElementById('app-root');
-  signinScreen.style.display = 'none';
-  appRoot.style.display = 'block';
   hideSplash();
+  document.getElementById('signin-screen').style.display = 'none';
+  document.getElementById('app-root').style.display = 'none';
 
-  // Show a "you need a family" splash inside the app
-  document.querySelector('.app').innerHTML = `
-    <div style="max-width:420px;margin:4rem auto;text-align:center;padding:0 1.5rem;">
-      <div style="font-size:3rem;margin-bottom:1rem;">💰</div>
-      <h1 style="font-size:1.4rem;font-weight:700;margin-bottom:0.5rem;">Welcome to Nectra</h1>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:0.5rem;">
-        Signed in as <strong>${escHtml(user.email)}</strong>
-      </p>
-      ${errorMsg ? `<p style="color:var(--danger);font-size:13px;margin-bottom:1rem;">${escHtml(errorMsg)}</p>` : ''}
-      <p style="color:var(--muted);font-size:14px;margin-bottom:2rem;">
-        You're not part of a family budget yet. Ask the family owner to share an invite link with you, or sign in with a different account.
-      </p>
-      <button onclick="fbAuth.signOut().then(()=>window.location.reload())"
-        class="btn btn-secondary" style="width:100%;">Sign out and try another account</button>
-    </div>`;
+  const onboarding = document.getElementById('onboarding-screen');
+  onboarding.style.display = 'flex';
+
+  const emailEl = document.getElementById('onboarding-user-email');
+  if (emailEl) emailEl.textContent = 'Signed in as ' + user.email;
+
+  const errEl = document.getElementById('onboarding-error');
+  if (errEl) {
+    errEl.style.display = errorMsg ? 'block' : 'none';
+    if (errorMsg) errEl.textContent = errorMsg;
+  }
+
+  // Pre-fill invite link if one is in the URL
+  const invite = getInviteFromURL();
+  if (invite) {
+    const linkInput = document.getElementById('invite-link-input');
+    if (linkInput) linkInput.value = window.location.href;
+  }
+}
+
+async function createNewFamily() {
+  const nameInput = document.getElementById('new-family-name');
+  const familyName = (nameInput?.value || '').trim();
+  if (!familyName) {
+    nameInput?.focus();
+    nameInput?.setAttribute('style', 'border-color:var(--danger);');
+    return;
+  }
+
+  const btn = document.querySelector('#onboarding-screen .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+  const user = fbAuth.currentUser;
+  if (!user) return;
+
+  try {
+    // Generate a unique family ID
+    const familyId = 'family_' + Math.random().toString(36).slice(2, 10) + '_' + Date.now().toString(36);
+
+    const newFamilyRef = fbDb.collection('families').doc(familyId);
+    await newFamilyRef.set({
+      meta: {
+        name: familyName,
+        ownerUid: user.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      },
+      members: {
+        [user.uid]: {
+          email: user.email,
+          displayName: user.displayName || '',
+          role: 'owner',
+          joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }
+      },
+      data: {
+        expenses: [],
+        categories: state.categories, // seed with defaults
+        groupOrder: [],
+        rules: [],
+        filters: []
+      }
+    });
+
+    // Create user doc pointing to this family
+    await fbDb.collection('users').doc(user.uid).set({
+      familyId,
+      email: user.email,
+      displayName: user.displayName || '',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Reload to pick up the new family
+    window.location.reload();
+
+  } catch(e) {
+    const errEl = document.getElementById('onboarding-error');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Could not create family: ' + e.message; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Create family budget'; }
+  }
+}
+
+async function joinViaInviteInput() {
+  const input = document.getElementById('invite-link-input');
+  const raw = (input?.value || '').trim();
+  if (!raw) { input?.focus(); return; }
+
+  // Extract invite param from the pasted URL
+  let familyId = null;
+  try {
+    const url = new URL(raw);
+    familyId = url.searchParams.get('invite');
+  } catch {
+    // Maybe they pasted just the family ID directly
+    familyId = raw;
+  }
+
+  if (!familyId) {
+    const errEl = document.getElementById('onboarding-error');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'That doesn\'t look like a valid invite link. Ask the family owner to copy it from Settings → Family → Copy invite link.'; }
+    return;
+  }
+
+  const btn = document.querySelector('#onboarding-screen .btn-secondary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+
+  const user = fbAuth.currentUser;
+  await joinFamilyViaInvite(user, familyId);
+  if (btn) { btn.disabled = false; btn.textContent = 'Join family'; }
 }
 
 // Renders family members list in Settings
