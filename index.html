@@ -3014,7 +3014,15 @@ function updateCSVPreview() {
         categoryCell = `<td><span style="background:var(--warn-light);color:var(--warn);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;">${escHtml(fallback)}</span></td>`;
       }
     }
-    t += `<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}${categoryCell}</tr>`;
+    t += `<tr>${r.map((c, colIdx) => {
+      // Show the flipped amount for the amount column, raw value for everything else
+      if (colIdx === ai && flipSigns && !isNaN(parseFloat(c))) {
+        const flipped = -parseFloat(c.replace(/[$,()]/g,'').trim());
+        const display = flipped < 0 ? `-$${fmt(Math.abs(flipped))}` : `$${fmt(flipped)}`;
+        return `<td style="${flipped < 0 ? 'color:var(--green-dark)' : ''}">${display}</td>`;
+      }
+      return `<td>${escHtml(c)}</td>`;
+    }).join('')}${categoryCell}</tr>`;
   });
   t += '</tbody></table>';
   document.getElementById('csv-preview-table').innerHTML = t;
