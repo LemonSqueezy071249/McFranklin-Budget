@@ -2994,7 +2994,7 @@ function updateCSVPreview() {
     // Check credit column
     if (ci >= 0 && r[ci]) {
       const credit = parseFloat((r[ci]||'').replace(/[$,()]/g,'').trim());
-      if (!isNaN(credit) && credit !== 0) amount = -Math.abs(credit);
+      if (!isNaN(credit) && credit !== 0) amount = flipSigns ? Math.abs(credit) : -Math.abs(credit);
     }
     const skip = isNaN(amount) || amount === 0;
 
@@ -3015,11 +3015,17 @@ function updateCSVPreview() {
       }
     }
     t += `<tr>${r.map((c, colIdx) => {
-      // Show the flipped amount for the amount column, raw value for everything else
+      // Show flipped amount for debit column
       if (colIdx === ai && flipSigns && !isNaN(parseFloat(c))) {
         const flipped = -parseFloat(c.replace(/[$,()]/g,'').trim());
         const display = flipped < 0 ? `-$${fmt(Math.abs(flipped))}` : `$${fmt(flipped)}`;
         return `<td style="${flipped < 0 ? 'color:var(--green-dark)' : ''}">${display}</td>`;
+      }
+      // Show flipped amount for credit column
+      if (colIdx === ci && ci >= 0 && flipSigns && !isNaN(parseFloat(c))) {
+        const flipped = parseFloat(c.replace(/[$,()]/g,'').trim()); // credit flipped = positive
+        const display = `$${fmt(Math.abs(flipped))}`;
+        return `<td>${display}</td>`;
       }
       return `<td>${escHtml(c)}</td>`;
     }).join('')}${categoryCell}</tr>`;
@@ -3058,7 +3064,7 @@ async function importCSV() {
     if (ci >= 0 && row[ci]) {
       const rawCredit = (row[ci]||'').replace(/[$,()]/g,'').trim();
       const creditAmt = parseFloat(rawCredit);
-      if (!isNaN(creditAmt) && creditAmt !== 0) { amount = -Math.abs(creditAmt); isRefund = true; refunds++; }
+      if (!isNaN(creditAmt) && creditAmt !== 0) { amount = flipSigns ? Math.abs(creditAmt) : -Math.abs(creditAmt); isRefund = !flipSigns; refunds += flipSigns ? 0 : 1; }
     }
     if (isNaN(amount) || amount === 0) continue;
     const dateRaw = row[di]||'';
