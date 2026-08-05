@@ -2868,6 +2868,14 @@ async function importQFX() {
   document.getElementById('csv-input').value = '';
   state.csvRows = []; state.csvHeaders = []; state.qfxTransactions = null;
 
+  // Mark watched file as imported now that import actually completed
+  if (state._watchedPendingKey) {
+    const ws = getWatchedFileState();
+    ws[state._watchedPendingKey] = 'imported';
+    setWatchedFileState(ws);
+    state._watchedPendingKey = null;
+  }
+
   const uncat = added - autoCat - refunds;
   const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
   const deletedNote = deleted > 0 ? `, ${deleted} skipped by rules` : '';
@@ -2884,6 +2892,8 @@ function cancelCSV() {
   document.getElementById('csv-success').style.display = 'none';
   document.getElementById('csv-input').value = '';
   state.csvRows = []; state.csvHeaders = [];
+  // If this was opened from a watched folder, keep it as pending (not imported)
+  state._watchedPendingKey = null;
 }
 
 function parseCSV(file) {
@@ -2924,6 +2934,13 @@ function showCSVMapper() {
       <option value="Uncategorized" selected>Uncategorized (recommended)</option>
       ${state.categories.map(c=>`<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('')}
     </select>
+  </div>
+  <div class="csv-map-full">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin-top:4px;">
+      <input type="checkbox" id="csv-flip-signs" onchange="updateCSVPreview()" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
+      Flip sign on all amounts
+    </label>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px;">Use this if your bank exports expenses as positive and credits as negative.</div>
   </div>`;
   document.getElementById('csv-map-grid').innerHTML = html;
 
@@ -2945,6 +2962,7 @@ function updateCSVPreview() {
   const ai  = parseInt(document.getElementById('csv-amount-col')?.value ?? 0);
   const ci  = parseInt(document.getElementById('csv-credit-col')?.value ?? -1);
   const fallback = document.getElementById('csv-cat-col')?.value || 'Uncategorized';
+  const flipSigns = document.getElementById('csv-flip-signs')?.checked || false;
 
   let autoCount = 0, deleteCount = 0, uncatCount = 0;
 
@@ -2961,6 +2979,7 @@ function updateCSVPreview() {
     const desc = r[dci] || '';
     const rawAmt = (r[ai]||'').replace(/[$,()]/g,'').trim();
     let amount = parseFloat(rawAmt);
+    if (flipSigns && !isNaN(amount)) amount = -amount;
     // Check credit column
     if (ci >= 0 && r[ci]) {
       const credit = parseFloat((r[ci]||'').replace(/[$,()]/g,'').trim());
@@ -3004,6 +3023,7 @@ async function importCSV() {
   const dci = parseInt(document.getElementById('csv-desc-col').value);
   const ci  = parseInt(document.getElementById('csv-credit-col').value);
   const fallbackCat = document.getElementById('csv-cat-col').value || 'Uncategorized';
+  const flipSigns = document.getElementById('csv-flip-signs')?.checked || false;
   const importBtn = document.getElementById('import-btn');
   const cancelBtn = document.getElementById('cancel-btn');
   if (importBtn) { importBtn.disabled = true; importBtn.textContent = 'Importing...'; }
@@ -3014,6 +3034,7 @@ async function importCSV() {
   for (const row of state.csvRows) {
     const rawAmt = (row[ai]||'').replace(/[$,()]/g,'').trim();
     let amount = parseFloat(rawAmt);
+    if (flipSigns && !isNaN(amount)) amount = -amount;
     let isRefund = false;
     if (ci >= 0 && row[ci]) {
       const rawCredit = (row[ci]||'').replace(/[$,()]/g,'').trim();
@@ -3542,9 +3563,8 @@ async function previewWatchedFile(i) {
   if (!f) return;
   try {
     const file = await f.handle.getFile();
-    const s = getWatchedFileState();
-    s[f.key] = 'imported';
-    setWatchedFileState(s);
+    // Store the pending key so cancelCSV can restore it to pending state
+    state._watchedPendingKey = f.key;
     routeImportFile(file);
     switchTab('add');
   } catch(e) { alert('Could not read file: ' + e.message); }
