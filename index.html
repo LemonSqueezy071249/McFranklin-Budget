@@ -122,6 +122,11 @@
   .cat-ytd .ytd-over { color: var(--danger); }
   .form-card { background: var(--surface); border-radius: var(--radius-lg); padding: 1.5rem 1.75rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); }
   .form-card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem; letter-spacing: -0.02em; }
+
+  /* Constrain content panels to a comfortable width on wide screens */
+  #tab-expenses, #tab-add, #tab-rules, #tab-budget, #tab-settings {
+    max-width: 860px;
+  }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .form-group { display: flex; flex-direction: column; gap: 5px; }
   .form-group.full { grid-column: 1 / -1; }
@@ -1373,6 +1378,7 @@ function switchTab(name, clickedEl) {
     });
   }
   if (name === 'add') scanWatchedFolders();
+  else refreshWatchedBadge();
 }
 
 // --- Period ----------------------------------------------------------
@@ -3768,8 +3774,15 @@ async function initWatchedFolders() {
     const saved = await loadWatchedFoldersFromDB();
     watchedFolders = saved;
     renderWatchedFoldersList();
+    // Scan and update badge — requestPermission may silently fail on first load
+    // so we also refresh the badge after any user interaction (switchTab)
     await scanWatchedFolders();
   } catch(e) { console.warn('Could not load watched folders', e); }
+}
+
+// Called after any user gesture (tab switch) to retry the scan with permission
+async function refreshWatchedBadge() {
+  if (watchedFolders.length > 0) await scanWatchedFolders();
 }
 
 async function addWatchedFolder() {
