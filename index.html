@@ -764,15 +764,55 @@
 
     <div class="settings-section">
       <h2>Account</h2>
-      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:1rem;">
         <div>
           <div style="font-size:14px; font-weight:600;" id="settings-user-name">—</div>
           <div style="font-size:13px; color:var(--muted);" id="settings-user-email">Not signed in</div>
         </div>
         <button class="btn btn-secondary" style="font-size:13px;" onclick="signOut()">Sign out</button>
       </div>
-      <div style="margin-top:1rem; padding:10px 14px; background:var(--accent-light); border-radius:var(--radius-sm); font-size:13px; color:var(--accent);">
+      <div style="padding:10px 14px; background:var(--accent-light); border-radius:var(--radius-sm); font-size:13px; color:var(--accent); margin-bottom:1.25rem;">
         Data syncs in real time between all members of your family budget.
+      </div>
+
+      <!-- Export -->
+      <div style="padding-bottom:1rem; border-bottom:1px solid var(--border); margin-bottom:1rem;">
+        <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Export data</div>
+        <div style="font-size:13px; color:var(--muted); margin-bottom:10px;">Download all your transactions as a CSV file you can open in Excel or any spreadsheet app.</div>
+        <button class="btn btn-secondary" style="font-size:13px;" onclick="exportToCSV()">Export all transactions</button>
+      </div>
+
+      <!-- Danger zone -->
+      <div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--danger); font-weight:700; margin-bottom:12px;">Danger zone</div>
+
+        <div style="margin-bottom:10px;">
+          <div style="font-size:14px; font-weight:600; margin-bottom:2px;">Delete my account</div>
+          <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Removes your user record from Nectra. Your family's budget data is not affected — other members will still have full access.</div>
+          <button class="btn btn-secondary" style="font-size:13px; border-color:var(--danger); color:var(--danger);" onclick="showDeleteConfirm('account')">Delete my account</button>
+        </div>
+
+        <div>
+          <div style="font-size:14px; font-weight:600; margin-bottom:2px;">Delete family budget</div>
+          <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Permanently deletes all transactions, budgets, rules, and filters for your entire family. This cannot be undone. Only the family owner can do this.</div>
+          <button class="btn btn-secondary" style="font-size:13px; border-color:var(--danger); color:var(--danger);" onclick="showDeleteConfirm('family')">Delete family budget</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete confirmation modal -->
+    <div id="delete-confirm-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:2000; align-items:center; justify-content:center; padding:1rem;">
+      <div style="background:var(--surface); border-radius:var(--radius-lg); padding:1.75rem; max-width:420px; width:100%; box-shadow:var(--shadow-lg);">
+        <h2 id="delete-confirm-title" style="font-size:1.1rem; font-weight:700; margin-bottom:0.5rem; color:var(--danger);"></h2>
+        <p id="delete-confirm-desc" style="font-size:13px; color:var(--muted); margin-bottom:1.25rem; line-height:1.6;"></p>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label">Type <strong id="delete-confirm-phrase" style="font-family:monospace; letter-spacing:0.05em;"></strong> to confirm</label>
+          <input type="text" id="delete-confirm-input" placeholder="" oninput="checkDeletePhrase()" style="margin-top:6px;">
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="delete-confirm-btn" class="btn" style="flex:1; background:var(--danger); color:white; opacity:0.4; cursor:default;" disabled onclick="executeDelete()">Delete</button>
+          <button class="btn btn-secondary" style="flex:1;" onclick="closeDeleteConfirm()">Cancel</button>
+        </div>
       </div>
     </div>
 
@@ -781,7 +821,7 @@
     </div>
 
     <div style="margin-top:1.5rem; text-align:center;">
-      <span style="font-size:11px; color:var(--muted);">Nectra v1.11</span>
+      <span style="font-size:11px; color:var(--muted);">Nectra v1.12</span>
     </div>
 
   </div>
@@ -3965,6 +4005,111 @@ function checkForSharedFile() {
     }
   } catch(e) { console.warn('Share target handling failed', e); }
   window.history.replaceState({}, '', window.location.pathname);
+}
+
+// --- Export ---
+function exportToCSV() {
+  const headers = ['Date', 'Description', 'Memo', 'Category', 'Who', 'Amount'];
+  const rows = state.expenses
+    .slice()
+    .sort((a, b) => (a.date||'').localeCompare(b.date||''))
+    .map(e => [
+      e.date || '',
+      '"' + (e.description||'').replace(/"/g, '""') + '"',
+      '"' + (e.memo||'').replace(/"/g, '""') + '"',
+      '"' + (e.category||'').replace(/"/g, '""') + '"',
+      e.who || '',
+      e.amount || 0
+    ].join(','));
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = 'nectra-export-' + date + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// --- Delete confirmation ---
+let _deleteScope = null;
+
+function showDeleteConfirm(scope) {
+  _deleteScope = scope;
+  const isFamily  = scope === 'family';
+  const phrase    = isFamily ? 'DELETE MY FAMILY' : 'DELETE MY ACCOUNT';
+  const title     = isFamily ? 'Delete family budget' : 'Delete my account';
+  const desc      = isFamily
+    ? 'This will permanently delete all transactions, budgets, rules, and filters for every member of your family. This cannot be undone.'
+    : 'This will remove your account from Nectra. Your family\'s budget data will remain accessible to other members.';
+
+  document.getElementById('delete-confirm-title').textContent = title;
+  document.getElementById('delete-confirm-desc').textContent  = desc;
+  document.getElementById('delete-confirm-phrase').textContent = phrase;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('delete-confirm-btn').style.opacity = '0.4';
+  document.getElementById('delete-confirm-btn').style.cursor = 'default';
+  document.getElementById('delete-confirm-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('delete-confirm-input').focus(), 100);
+}
+
+function checkDeletePhrase() {
+  const phrase  = document.getElementById('delete-confirm-phrase').textContent;
+  const input   = document.getElementById('delete-confirm-input').value;
+  const btn     = document.getElementById('delete-confirm-btn');
+  const matches = input === phrase;
+  btn.disabled  = !matches;
+  btn.style.opacity = matches ? '1' : '0.4';
+  btn.style.cursor  = matches ? 'pointer' : 'default';
+}
+
+function closeDeleteConfirm() {
+  document.getElementById('delete-confirm-overlay').style.display = 'none';
+  _deleteScope = null;
+}
+
+async function executeDelete() {
+  const scope = _deleteScope;
+  closeDeleteConfirm();
+  const user = fbAuth?.currentUser;
+  if (!user) return;
+
+  try {
+    if (scope === 'account') {
+      // Delete /users/{uid} doc and sign out
+      await fbDb.collection('users').doc(user.uid).delete();
+      // Remove from family members map
+      if (currentFamilyId) {
+        await fbDb.collection('families').doc(currentFamilyId).update({
+          ['members.' + user.uid]: firebase.firestore.FieldValue.delete()
+        });
+      }
+      await fbAuth.signOut();
+      window.location.reload();
+
+    } else if (scope === 'family') {
+      // Only owner can delete family — check role
+      const famSnap = await fbDb.collection('families').doc(currentFamilyId).get();
+      const famData = famSnap.data();
+      if (famData?.meta?.ownerUid !== user.uid) {
+        alert('Only the family owner can delete the family budget.');
+        return;
+      }
+      // Delete family doc and all user docs pointing to it
+      const members = Object.keys(famData.members || {});
+      const batch = fbDb.batch();
+      batch.delete(fbDb.collection('families').doc(currentFamilyId));
+      members.forEach(uid => batch.delete(fbDb.collection('users').doc(uid)));
+      await batch.commit();
+      await fbAuth.signOut();
+      window.location.reload();
+    }
+  } catch(e) {
+    alert('Delete failed: ' + e.message);
+  }
 }
 
 // --- Recurring Transaction Management ---
