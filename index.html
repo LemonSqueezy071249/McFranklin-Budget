@@ -1937,6 +1937,7 @@ function drillDownToCategory(catName) {
 
     const budget = cat ? getBudgetForPeriod(cat) : 0;
     const pct = budget > 0 ? Math.round((spent / budget) * 100) : null;
+    const remaining = budget - spent;
     const over = remaining < 0;
 
     const periodLabel = {
