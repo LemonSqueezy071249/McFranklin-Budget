@@ -4043,7 +4043,7 @@ function showDeleteConfirm(scope) {
   const title     = isFamily ? 'Delete family budget' : 'Delete my account';
   const desc      = isFamily
     ? 'This will permanently delete all transactions, budgets, rules, and filters for every member of your family. This cannot be undone.'
-    : 'This will remove your account from Nectra. Your family\'s budget data will remain accessible to other members.';
+    : 'This will remove your account from Nectra. If you are the only member, the family budget will also be permanently deleted. Otherwise, your family\'s data remains accessible to other members.';
 
   document.getElementById('delete-confirm-title').textContent = title;
   document.getElementById('delete-confirm-desc').textContent  = desc;
@@ -4079,14 +4079,29 @@ async function executeDelete() {
 
   try {
     if (scope === 'account') {
-      // Delete /users/{uid} doc and sign out
-      await fbDb.collection('users').doc(user.uid).delete();
-      // Remove from family members map
+      // Check if sole member — if so, delete the family too
+      let isSoleMember = false;
       if (currentFamilyId) {
-        await fbDb.collection('families').doc(currentFamilyId).update({
+        const famSnap = await fbDb.collection('families').doc(currentFamilyId).get();
+        const members = famSnap.exists ? Object.keys(famSnap.data().members || {}) : [];
+        isSoleMember = members.length <= 1;
+      }
+
+      const batch = fbDb.batch();
+      // Always delete the user doc
+      batch.delete(fbDb.collection('users').doc(user.uid));
+
+      if (isSoleMember && currentFamilyId) {
+        // Last member — delete the whole family doc too, nothing left to keep
+        batch.delete(fbDb.collection('families').doc(currentFamilyId));
+      } else if (currentFamilyId) {
+        // Other members exist — just remove self from the members map
+        batch.update(fbDb.collection('families').doc(currentFamilyId), {
           ['members.' + user.uid]: firebase.firestore.FieldValue.delete()
         });
       }
+
+      await batch.commit();
       await fbAuth.signOut();
       window.location.reload();
 
