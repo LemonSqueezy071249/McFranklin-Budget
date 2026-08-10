@@ -4138,7 +4138,12 @@ async function executeDelete() {
 // Patterns: light (navigation), medium (save/action), heavy (delete), error (pattern)
 function haptic(type) {
   if (!navigator.vibrate) return;
-  if (localStorage.getItem(prefsKey('haptics')) !== 'true') return;
+  // Check both the email-prefixed key and a global fallback
+  const emailKey = prefsKey('haptics');
+  const fallbackKey = 'haptics_enabled';
+  const enabled = localStorage.getItem(emailKey) === 'true' ||
+                  localStorage.getItem(fallbackKey) === 'true';
+  if (!enabled) return;
   const patterns = {
     light:  10,
     medium: 25,
@@ -4150,13 +4155,19 @@ function haptic(type) {
 
 function saveHapticPref() {
   const checked = document.getElementById('pref-haptics')?.checked;
+  // Save to both keyed and fallback storage so it works regardless of auth state
   localStorage.setItem(prefsKey('haptics'), checked ? 'true' : 'false');
-  if (checked) haptic('medium'); // demo the vibration
+  localStorage.setItem('haptics_enabled', checked ? 'true' : 'false');
+  if (checked) navigator.vibrate && navigator.vibrate([25, 50, 25, 50, 25]); // demo pattern
 }
 
 function loadHapticPref() {
   const el = document.getElementById('pref-haptics');
-  if (el) el.checked = localStorage.getItem(prefsKey('haptics')) === 'true';
+  if (!el) return;
+  const emailKey = prefsKey('haptics');
+  const fallbackKey = 'haptics_enabled';
+  el.checked = localStorage.getItem(emailKey) === 'true' ||
+               localStorage.getItem(fallbackKey) === 'true';
 }
 
 // --- Recurring Transaction Management ---
