@@ -48,11 +48,11 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { overflow-x: hidden; max-width: 100vw; }
   body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
-  .app { max-width: 1400px; margin: 0 auto; padding: 2rem 2rem 4rem; overflow-x: hidden; }
+  .app { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem 4rem; overflow-x: hidden; }
 
   /* Wide desktop — sidebar layout for dashboard */
   @media (min-width: 1100px) {
-    .app { padding: 2rem 3rem 4rem; }
+    .app:has(#tab-dashboard.active) { max-width: 1400px; padding: 2rem 3rem 4rem; }
     #tab-dashboard.panel.active {
       display: grid;
       grid-template-columns: 1fr 320px;
@@ -68,7 +68,7 @@
   }
 
   @media (min-width: 1300px) {
-    .app { padding: 2rem 4rem 4rem; }
+    .app:has(#tab-dashboard.active) { max-width: 1500px; padding: 2rem 4rem 4rem; }
     .cat-row { grid-template-columns: 260px 1fr 110px 110px 110px; }
   }
   header { margin-bottom: 1.75rem; padding: 1.25rem 1.5rem; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; }
@@ -122,11 +122,6 @@
   .cat-ytd .ytd-over { color: var(--danger); }
   .form-card { background: var(--surface); border-radius: var(--radius-lg); padding: 1.5rem 1.75rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); }
   .form-card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem; letter-spacing: -0.02em; }
-
-  /* Constrain content panels to a comfortable width on wide screens */
-  #tab-expenses, #tab-add, #tab-rules, #tab-budget, #tab-settings {
-    max-width: 860px;
-  }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .form-group { display: flex; flex-direction: column; gap: 5px; }
   .form-group.full { grid-column: 1 / -1; }
@@ -737,9 +732,13 @@
           </select>
         </div>
       </div>
-      <div style="margin-top:1rem;">
-        <button class="btn btn-primary" onclick="saveUserPrefs()">Save preferences</button>
-      </div>
+        <div class="form-group full" style="flex-direction:row; align-items:center; gap:10px; padding-top:4px;">
+          <input type="checkbox" id="pref-haptics" onchange="saveHapticPref()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent); flex-shrink:0;">
+          <div>
+            <label for="pref-haptics" style="font-size:14px; font-weight:500; cursor:pointer;">Haptic feedback</label>
+            <div style="font-size:12px; color:var(--muted);">Subtle vibration on actions (Android only — iPhone does not support this in web apps)</div>
+          </div>
+        </div>
     </div>
 
     <div class="settings-section">
@@ -1348,7 +1347,7 @@ async function btnSave(btn, work, { successLabel = 'Saved', errorLabel = 'Try ag
 
   try {
     await work();
-    // Saved state
+    haptic('medium');
     btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-saved';
     btn.innerHTML = `Saved`;
     setTimeout(() => {
@@ -1357,6 +1356,7 @@ async function btnSave(btn, work, { successLabel = 'Saved', errorLabel = 'Try ag
       btn.disabled = false;
     }, resetMs);
   } catch (err) {
+    haptic('error');
     // Error state - show briefly then reset
     btn.className = origClass.replace(/btn-saved|btn-saving|btn-error/g, '').trim() + ' btn-error';
     btn.innerHTML = errorLabel;
@@ -1404,6 +1404,7 @@ function setTodayDate() {
 // --- Tabs ------------------------------------------------------------
 // Shows the selected panel and highlights the active tab button.
 function switchTab(name, clickedEl) {
+  haptic('light');
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
@@ -1918,6 +1919,7 @@ function populatePrefsUI() {
   // Populate combined prefs; fallback migration handled in loadUserPrefs
   set('pref-period', 'period', 'monthly');
   set('pref-filter', 'filter', '');
+  loadHapticPref();
 }
 
 function saveUserPrefs() {
@@ -1942,6 +1944,7 @@ function saveUserPrefs() {
 
 // --- Drill-down: Dashboard category → Transactions ---
 function drillDownToCategory(catName) {
+  haptic('light');
   state.expPeriod = state.viewPeriod;
   state.expMonth  = state.viewMonth;
   state.expYear   = state.viewYear;
@@ -2258,6 +2261,7 @@ function renderExpenseTable() {
 }
 
 async function deleteExpense(idx) {
+  haptic('heavy');
   if (!confirm('Delete this expense?')) return;
   state.expenses.splice(idx, 1);
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
@@ -4125,6 +4129,32 @@ async function executeDelete() {
   } catch(e) {
     alert('Delete failed: ' + e.message);
   }
+}
+
+// --- Haptic Feedback ---
+// navigator.vibrate is ignored silently on iPhone — Android only.
+// Patterns: light (navigation), medium (save/action), heavy (delete), error (pattern)
+function haptic(type) {
+  if (!navigator.vibrate) return;
+  if (localStorage.getItem(prefsKey('haptics')) !== 'true') return;
+  const patterns = {
+    light:  10,
+    medium: 25,
+    heavy:  40,
+    error:  [40, 20, 40]
+  };
+  navigator.vibrate(patterns[type] || 10);
+}
+
+function saveHapticPref() {
+  const checked = document.getElementById('pref-haptics')?.checked;
+  localStorage.setItem(prefsKey('haptics'), checked ? 'true' : 'false');
+  if (checked) haptic('medium'); // demo the vibration
+}
+
+function loadHapticPref() {
+  const el = document.getElementById('pref-haptics');
+  if (el) el.checked = localStorage.getItem(prefsKey('haptics')) === 'true';
 }
 
 // --- Recurring Transaction Management ---
