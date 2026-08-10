@@ -155,6 +155,16 @@
   .del-btn:hover { color: var(--danger); background: var(--danger-light); }
   .pencil-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 7px; border-radius: var(--radius-sm); transition: all 0.15s; line-height: 1; }
   .pencil-btn:hover { color: var(--accent); background: var(--accent-light); }
+  .recur-btn { background:none; border:none; cursor:pointer; color:var(--accent); font-size:13px; padding:4px 7px; border-radius:var(--radius-sm); transition:all 0.15s; line-height:1; opacity:0.6; }
+  .recur-btn:hover { opacity:1; background:var(--accent-light); }
+  #recur-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:2000; display:none; align-items:center; justify-content:center; padding:1rem; }
+  #recur-modal { background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); padding:1.75rem; max-width:440px; width:100%; }
+  #recur-modal h2 { font-size:1.1rem; font-weight:700; margin-bottom:0.35rem; }
+  #recur-modal p { font-size:13px; color:var(--muted); margin-bottom:1.25rem; line-height:1.6; }
+  .recur-option { display:flex; flex-direction:column; gap:4px; margin-bottom:0.75rem; padding:14px; border:1.5px solid var(--border-strong); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; }
+  .recur-option:hover { border-color:var(--accent); background:var(--accent-light); }
+  .recur-option strong { font-size:14px; font-weight:600; }
+  .recur-option span { font-size:12px; color:var(--muted); }
   .sync-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; font-weight: 500; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
   .sync-status.syncing { background: var(--accent-light); color: var(--accent); border-color: rgba(88,86,214,0.18); }
   .sync-status.synced { background: var(--green-light); color: var(--green-dark); border-color: rgba(57,161,90,0.2); }
@@ -484,8 +494,8 @@
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('dashboard',this)">Dashboard</button>
-    <button class="tab" onclick="switchTab('expenses',this)">Transactions</button>
-    <button class="tab" onclick="switchTab('add',this)">Add Transaction</button>
+    <button class="tab" onclick="switchTab('expenses',this)">Transactions <span id="uncat-badge" style="display:none;background:#E09A2A;color:white;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle;"></span></button>
+    <button class="tab" onclick="switchTab('add',this)">Add Transaction <span id="import-badge" style="display:none;background:var(--danger);color:white;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle;"></span></button>
     <button class="tab" onclick="switchTab('budget',this)">Budget</button>
     <button class="tab" onclick="switchTab('rules',this)">Rules</button>
     <button class="tab" onclick="switchTab('settings',this)">Settings</button>
@@ -1903,17 +1913,75 @@ function drillDownToCategory(catName) {
   const breadcrumb = document.getElementById('exp-breadcrumb');
   if (breadcrumb) {
     breadcrumb.style.display = 'flex';
+    breadcrumb.style.flexDirection = 'column';
+    breadcrumb.style.gap = '8px';
+
+    // Compute spent vs budget — use period filter but not the category drill-down filter
+    // Temporarily save and clear the category filter to get period-only results
+    const cat = state.categories.find(c => c.name === catName);
+    const now = new Date();
+    const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const periodRows = state.expenses.filter(e => {
+      if (!e.date) return false;
+      const d = new Date(e.date + 'T12:00:00');
+      if (state.expPeriod === 'monthly')   return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+      if (state.expPeriod === 'lastmonth') return d.getMonth()===last.getMonth() && d.getFullYear()===last.getFullYear();
+      if (state.expPeriod === 'ytd')       return d.getFullYear()===now.getFullYear() && d<=now;
+      if (state.expPeriod === 'yearly')    return d.getFullYear()===now.getFullYear();
+      if (state.expPeriod === 'custom')    return d.getMonth()===state.expMonth && d.getFullYear()===state.expYear;
+      return true;
+    });
+    const spent = periodRows
+      .filter(e => e.category === catName)
+      .reduce((s, e) => s + (parseFloat(e.amount)||0), 0);
+
+    const budget = cat ? getBudgetForPeriod(cat) : 0;
+    const pct = budget > 0 ? Math.round((spent / budget) * 100) : null;
+    const over = remaining < 0;
+
+    const periodLabel = {
+      monthly: 'this month', lastmonth: 'last month',
+      ytd: 'year to date', yearly: 'this year',
+      all: 'all time', custom: state.expMonth !== undefined
+        ? new Date(state.expYear, state.expMonth).toLocaleString('default', { month: 'long', year: 'numeric' })
+        : 'custom period'
+    }[state.expPeriod] || '';
+
+    const summaryHtml = budget > 0 ? `
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;">Spent</span>
+          <div style="font-size:1.2rem;font-weight:700;letter-spacing:-0.02em;">$${fmt(spent)}</div></div>
+        <div style="color:var(--muted);font-size:18px;">of</div>
+        <div><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;">Budget</span>
+          <div style="font-size:1.2rem;font-weight:700;letter-spacing:-0.02em;">$${fmt(budget)}</div></div>
+        <div style="flex:1;min-width:120px;">
+          <div style="height:6px;background:rgba(0,0,0,0.08);border-radius:99px;overflow:hidden;margin-bottom:4px;">
+            <div style="height:100%;border-radius:99px;width:${Math.min(pct,100)}%;background:${pct>100?'var(--danger)':pct>=90?'var(--warn)':'var(--green)'}"></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:${over?'var(--danger)':pct>=90?'var(--warn)':'var(--green-dark)'}">
+            ${over ? '$'+fmt(Math.abs(remaining))+' over budget' : '$'+fmt(remaining)+' remaining'} · ${pct}%
+          </div>
+        </div>
+      </div>` : `
+      <div style="font-size:13px;color:var(--muted);">$${fmt(spent)} spent ${periodLabel} · no budget set for this category</div>`;
+
     breadcrumb.innerHTML = `
-      <button onclick="returnToBudget('${escHtml(catName)}')"
-        style="background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--accent);padding:0;font-weight:500;">
-        ← Dashboard
-      </button>
-      <span style="font-size:13px;color:var(--muted);margin:0 8px;">›</span>
-      <span style="font-size:13px;font-weight:600;color:var(--text);">${escHtml(catName)}</span>
-      <button onclick="clearDrillDown()"
-        style="margin-left:auto;font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:var(--sans);">
-        Clear filter
-      </button>`;
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onclick="returnToBudget('${escHtml(catName)}')"
+            style="background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--accent);padding:0;font-weight:500;">
+            ← Dashboard
+          </button>
+          <span style="font-size:13px;color:var(--muted);">›</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text);">${escHtml(catName)}</span>
+          ${periodLabel ? `<span style="font-size:12px;color:var(--muted);">· ${periodLabel}</span>` : ''}
+        </div>
+        <button onclick="clearDrillDown()"
+          style="font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:var(--sans);">
+          Clear filter
+        </button>
+      </div>
+      ${summaryHtml}`;
   }
   renderExpenseTable();
 }
@@ -1992,6 +2060,23 @@ function dismissPWABanner() {
 // Renders the full transaction list respecting the active period, category
 // filter, and search query. Each row gets Edit (✎), Split (⇌), and Delete (✕)
 // buttons with hidden inline editor rows that open beneath each transaction.
+// Updates the uncategorized badge on the Transactions tab.
+// Counts truly uncategorized transactions from the current year only.
+function updateUncatBadge() {
+  const badge = document.getElementById('uncat-badge');
+  if (!badge) return;
+  const thisYear = new Date().getFullYear();
+  const count = state.expenses.filter(e => {
+    if (!e.date) return false;
+    const year = new Date(e.date + 'T12:00:00').getFullYear();
+    if (year !== thisYear) return false;
+    return !e.category || e.category === 'Uncategorized';
+  }).length;
+  badge.textContent = 'U';
+  badge.style.display = count > 0 ? 'inline' : 'none';
+  badge.title = count + ' uncategorized transaction' + (count !== 1 ? 's' : '') + ' this year';
+}
+
 // Sorts by the clicked column; clicking the same column toggles asc/desc.
 function setSort(col) {
   if (state.sortCol === col) {
@@ -2006,6 +2091,7 @@ function setSort(col) {
 
 function renderExpenseTable() {
   renderExpFilterChips();
+  updateUncatBadge();
   const allBtn = document.getElementById('exp-filter-all');
   const uncBtn = document.getElementById('exp-filter-uncategorized');
   if (allBtn) allBtn.classList.toggle('active', !state.expFilter);
@@ -2084,6 +2170,7 @@ function renderExpenseTable() {
       <td class="desktop-only" style="text-align:right;font-weight:600;${amtColor};white-space:nowrap;">${amtDisplay}</td>
       <td class="desktop-only" style="white-space:nowrap;">
         <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center;">
+          ${e.recurringId ? `<button class="recur-btn" title="Manage recurring" onclick="openRecurModal(${idx})">↻</button>` : ''}
           <button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
           <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px;padding:2px 7px;">⇌</button>
           <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>
@@ -2102,6 +2189,7 @@ function renderExpenseTable() {
         <span style="font-size:12px;color:var(--muted);">${e.date||''}</span>
       </td>
       <td class="exp-card-actions">
+        ${e.recurringId ? `<button class="recur-btn" title="Manage recurring" onclick="openRecurModal(${idx})">↻</button>` : ''}
         <button class="pencil-btn" title="Edit" onclick="openEdit(${idx})">✎</button>
         <button class="del-btn" title="Split" onclick="openSplit(${idx})" style="font-size:13px;padding:2px 7px;">⇌</button>
         <button class="del-btn" title="Delete" onclick="deleteExpense(${idx})">✕</button>
@@ -2775,8 +2863,10 @@ async function addExpense() {
     ? generateRecurringDates(date, freq, recurDay, recurDate)
     : [date];
 
+  const recurringId = isRecurring ? ('recur_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6)) : null;
+
   const newExps = dates.map(d => ({ date: d, amount, category, description, memo, who,
-    ...(isRecurring ? { recurring: freq } : {}) }));
+    ...(isRecurring ? { recurring: freq, recurringId, recurDay, recurDate } : {}) }));
 
   state.expenses.push(...newExps);
   localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
@@ -3368,12 +3458,16 @@ function renderBudgetEditor() {
 
 function updateCat(i, key, val) {
   if (key === 'name' && val && val !== state.categories[i].name) {
-    // Rename all transactions that use the old category name
     const oldName = state.categories[i].name;
     if (oldName) {
+      const txCount = state.expenses.filter(e => e.category === oldName).length;
+      if (txCount > 0) {
+        const msg = `Rename "${oldName}" to "${val}"?\n\nThis will update ${txCount} transaction${txCount!==1?'s':''} to the new name.\n\nNote: if you previously deleted a "${oldName}" category, those older transactions will also be renamed.`;
+        if (!confirm(msg)) return; // abort — don't rename
+      }
+      // Apply the rename to all matching transactions
       state.expenses.forEach(e => { if (e.category === oldName) e.category = val; });
       localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
-      // Sync expenses in background
       if (state.connected) db.saveExpenses(state.expenses).catch(() => {});
     }
   }
@@ -3738,6 +3832,13 @@ function renderWatchedFilesList(pending, declined, imported) {
   if (!el) return;
   window._watchedFilesList = pending;
 
+  // Update the badge on the Add Transaction tab
+  const badge = document.getElementById('import-badge');
+  if (badge) {
+    badge.textContent = pending.length;
+    badge.style.display = pending.length > 0 ? 'inline' : 'none';
+  }
+
   let html = '';
 
   // Pending files — Preview & Import / Decline
@@ -3848,6 +3949,118 @@ function checkForSharedFile() {
   window.history.replaceState({}, '', window.location.pathname);
 }
 
+// --- Recurring Transaction Management ---
+function openRecurModal(idx) {
+  const e = state.expenses[idx];
+  if (!e || !e.recurringId) return;
+
+  const series = state.expenses
+    .map((t, i) => ({ ...t, _idx: i }))
+    .filter(t => t.recurringId === e.recurringId)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const future = series.filter(t => t.date >= e.date);
+  const freqLabel = { daily:'Daily', weekly:'Weekly', monthly:'Monthly', yearly:'Yearly' }[e.recurring] || e.recurring;
+
+  const overlay = document.getElementById('recur-modal-overlay');
+  document.getElementById('recur-modal-desc').innerHTML =
+    `<strong>${escHtml(e.description)}</strong> &middot; ${freqLabel} &middot; $${fmt(e.amount)}<br>
+    <span style="font-size:12px;">${series.length} total in series &middot; ${future.length} from this date onward</span>`;
+
+  document.getElementById('recur-modal-actions').innerHTML = `
+    <div class="recur-option" onclick="deleteRecurring(${idx},'this')">
+      <strong>Delete this transaction only</strong>
+      <span>Removes only ${escHtml(e.date)}. Other entries unchanged.</span>
+    </div>
+    <div class="recur-option" onclick="deleteRecurring(${idx},'future')">
+      <strong>Delete this and future transactions</strong>
+      <span>Removes ${future.length} transaction${future.length!==1?'s':''} from ${escHtml(e.date)} onward.</span>
+    </div>
+    <div class="recur-option" onclick="deleteRecurring(${idx},'all')">
+      <strong>Delete all transactions in this series</strong>
+      <span>Removes all ${series.length} entries regardless of date.</span>
+    </div>
+    <div class="recur-option" onclick="closeRecurModal(); openEdit(${idx});">
+      <strong>Edit this transaction only</strong>
+      <span>Opens the standard edit form for just this entry.</span>
+    </div>
+    <div class="recur-option" onclick="showModifyFutureForm(${idx})">
+      <strong>Modify this and future transactions</strong>
+      <span>Change amount, category, or description for ${future.length} entries from ${escHtml(e.date)} onward.</span>
+    </div>`;
+
+  overlay.style.display = 'flex';
+}
+
+function closeRecurModal(event) {
+  if (event && event.target !== document.getElementById('recur-modal-overlay')) return;
+  document.getElementById('recur-modal-overlay').style.display = 'none';
+}
+
+async function deleteRecurring(idx, scope) {
+  const e = state.expenses[idx];
+  if (!e || !e.recurringId) return;
+  document.getElementById('recur-modal-overlay').style.display = 'none';
+  const rid = e.recurringId;
+  const scopeLabel = scope === 'this' ? 'this transaction'
+    : scope === 'future' ? 'this and future transactions'
+    : 'all transactions in this series';
+  if (!confirm('Delete ' + scopeLabel + '?')) return;
+  state.expenses = state.expenses.filter(function(t, i) {
+    if (t.recurringId !== rid) return true;
+    if (scope === 'this')   return i !== idx;
+    if (scope === 'future') return t.date < e.date;
+    return false;
+  });
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  renderExpenseTable();
+  renderDashboard();
+  if (state.connected) backgroundSave(db.saveExpenses(state.expenses));
+}
+
+function showModifyFutureForm(idx) {
+  const e = state.expenses[idx];
+  if (!e) return;
+  const rid = e.recurringId;
+  const future = state.expenses.filter(function(t) { return t.recurringId === rid && t.date >= e.date; });
+  const catOptions = state.categories.map(function(c) {
+    return '<option value="' + escHtml(c.name) + '"' + (c.name===e.category?' selected':'') + '>' + escHtml(c.name) + '</option>';
+  }).join('');
+
+  document.getElementById('recur-modal-desc').innerHTML =
+    'Editing <strong>' + future.length + ' transaction' + (future.length!==1?'s':'') + '</strong> from <strong>' + escHtml(e.date) + '</strong> onward';
+
+  document.getElementById('recur-modal-actions').innerHTML =
+    '<div class="form-grid" style="margin-bottom:1rem;">' +
+    '<div class="form-group"><label class="field-label">Amount</label>' +
+    '<input type="number" id="recur-edit-amount" value="' + e.amount + '" step="0.01"></div>' +
+    '<div class="form-group"><label class="field-label">Category</label>' +
+    '<select id="recur-edit-cat">' + catOptions + '</select></div>' +
+    '<div class="form-group full"><label class="field-label">Description</label>' +
+    '<input type="text" id="recur-edit-desc" value="' + escHtml(e.description||'') + '"></div></div>' +
+    '<button class="btn btn-primary" style="width:100%;" onclick="applyFutureModify(' + idx + ')">Apply to ' + future.length + ' transaction' + (future.length!==1?'s':'') + '</button>';
+}
+
+async function applyFutureModify(idx) {
+  const e = state.expenses[idx];
+  if (!e) return;
+  const rid = e.recurringId;
+  const amount      = parseFloat(document.getElementById('recur-edit-amount')?.value);
+  const category    = document.getElementById('recur-edit-cat')?.value;
+  const description = document.getElementById('recur-edit-desc')?.value.trim();
+  if (isNaN(amount) || amount === 0 || !category) return;
+  state.expenses.forEach(function(t, i) {
+    if (t.recurringId === rid && t.date >= e.date) {
+      state.expenses[i] = Object.assign({}, t, { amount: amount, category: category, description: description });
+    }
+  });
+  localStorage.setItem('budget_expenses', JSON.stringify(state.expenses));
+  document.getElementById('recur-modal-overlay').style.display = 'none';
+  renderExpenseTable();
+  renderDashboard();
+  if (state.connected) backgroundSave(db.saveExpenses(state.expenses));
+}
+
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 // fmt: formats a number as a 2-decimal dollar amount string (no $ sign).
@@ -3868,6 +4081,16 @@ if ('serviceWorker' in navigator) {
 }
 
 </script>
+
+<!-- Recurring transaction management modal -->
+<div id="recur-modal-overlay" onclick="closeRecurModal(event)">
+  <div id="recur-modal">
+    <h2>↻ Recurring Transaction</h2>
+    <p id="recur-modal-desc"></p>
+    <div id="recur-modal-actions"></div>
+    <button class="btn btn-secondary" style="width:100%;margin-top:0.5rem;" onclick="closeRecurModal()">Cancel</button>
+  </div>
+</div>
 
 </div><!-- /app-root -->
 </body>
