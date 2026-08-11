@@ -432,17 +432,42 @@
     <img src="icons/icon-512.png" class="landing-icon" alt="Nectra">
     <div class="landing-title">Nectra</div>
     <p class="landing-sub">Track your family budget together,<br>in real time.</p>
-    <div class="landing-features">
-      <div class="landing-feature"><span class="landing-feature-icon">📊</span> Dashboard with budget progress by category</div>
-      <div class="landing-feature"><span class="landing-feature-icon">🔄</span> Real-time sync between family members</div>
-      <div class="landing-feature"><span class="landing-feature-icon">📥</span> Import from CSV, QFX, OFX and more</div>
-      <div class="landing-feature"><span class="landing-feature-icon">🏷️</span> Auto-categorize with import rules</div>
+
+    <!-- Mode toggle -->
+    <div style="display:flex;gap:0;background:var(--surface-2);border-radius:var(--radius);padding:3px;margin-bottom:1.25rem;">
+      <button id="mode-signin-btn" onclick="setAuthMode('signin')" style="flex:1;padding:7px;font-size:13px;font-weight:600;border:none;border-radius:calc(var(--radius) - 2px);background:var(--surface);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--sans);color:var(--accent);transition:all .15s;">Sign in</button>
+      <button id="mode-signup-btn" onclick="setAuthMode('signup')" style="flex:1;padding:7px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;font-family:var(--sans);color:var(--muted);transition:all .15s;">Create account</button>
     </div>
+
+    <!-- Error message -->
+    <div id="auth-error" style="display:none;background:var(--danger-light);color:var(--danger);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;margin-bottom:1rem;text-align:left;"></div>
+
+    <!-- Email/password fields -->
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:1rem;">
+      <input type="email" id="auth-email" placeholder="Email address" style="font-size:14px;padding:10px 14px;border-radius:var(--radius);border:1.5px solid var(--border-strong);font-family:var(--sans);background:var(--surface);">
+      <input type="password" id="auth-password" placeholder="Password" style="font-size:14px;padding:10px 14px;border-radius:var(--radius);border:1.5px solid var(--border-strong);font-family:var(--sans);background:var(--surface);" onkeydown="if(event.key==='Enter')submitEmailAuth()">
+      <input type="password" id="auth-password2" placeholder="Confirm password" style="display:none;font-size:14px;padding:10px 14px;border-radius:var(--radius);border:1.5px solid var(--border-strong);font-family:var(--sans);background:var(--surface);" onkeydown="if(event.key==='Enter')submitEmailAuth()">
+    </div>
+
+    <button onclick="submitEmailAuth()" style="width:100%;padding:12px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--sans);margin-bottom:8px;transition:opacity .15s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+      <span id="auth-submit-label">Sign in</span>
+    </button>
+
+    <button id="forgot-btn" onclick="sendPasswordReset()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);font-family:var(--sans);margin-bottom:1rem;">Forgot password?</button>
+
+    <!-- Divider -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <span style="font-size:12px;color:var(--muted);">or</span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>
+
     <button class="signin-btn" onclick="signInWithGoogle()">
       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
       Continue with Google
     </button>
-    <p style="font-size:12px;color:var(--muted);margin-top:1rem;line-height:1.5;">By signing in you agree to use this app responsibly. Your data is stored securely in Firebase and shared only with your family members.</p>
+
+    <p style="font-size:12px;color:var(--muted);margin-top:1rem;line-height:1.5;">Your data is stored securely in Firebase and shared only with your family members.</p>
   </div>
 </div>
 
@@ -1096,10 +1121,77 @@ function backgroundSave(savePromise) {
 // --- Auth ---
 function signInWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
-  fbAuth.signInWithPopup(provider).catch(function(err) {
-    console.error('Sign-in failed', err);
-    alert('Sign-in failed: ' + err.message);
-  });
+  fbAuth.signInWithPopup(provider).catch(function(e) { showAuthError(friendlyAuthError(e)); });
+}
+
+let _authMode = 'signin';
+
+function setAuthMode(mode) {
+  _authMode = mode;
+  const isSignup = mode === 'signup';
+  document.getElementById('auth-password2').style.display = isSignup ? '' : 'none';
+  document.getElementById('auth-submit-label').textContent = isSignup ? 'Create account' : 'Sign in';
+  document.getElementById('forgot-btn').style.display = isSignup ? 'none' : '';
+  const signinStyle = 'flex:1;padding:7px;font-size:13px;font-weight:600;border:none;border-radius:calc(var(--radius) - 2px);background:var(--surface);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--sans);color:var(--accent);transition:all .15s;';
+  const mutedStyle  = 'flex:1;padding:7px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;font-family:var(--sans);color:var(--muted);transition:all .15s;';
+  document.getElementById('mode-signin-btn').style.cssText = isSignup ? mutedStyle  : signinStyle;
+  document.getElementById('mode-signup-btn').style.cssText = isSignup ? signinStyle : mutedStyle;
+  clearAuthError();
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.background = 'var(--danger-light)';
+  el.style.color = 'var(--danger)';
+  el.style.display = 'block';
+}
+
+function clearAuthError() {
+  const el = document.getElementById('auth-error');
+  if (el) el.style.display = 'none';
+}
+
+async function submitEmailAuth() {
+  const email     = document.getElementById('auth-email')?.value.trim();
+  const password  = document.getElementById('auth-password')?.value;
+  const password2 = document.getElementById('auth-password2')?.value;
+  clearAuthError();
+  if (!email || !password) { showAuthError('Please enter your email and password.'); return; }
+  if (_authMode === 'signup') {
+    if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
+    if (password !== password2) { showAuthError('Passwords do not match.'); return; }
+    try { await fbAuth.createUserWithEmailAndPassword(email, password); }
+    catch(e) { showAuthError(friendlyAuthError(e)); }
+  } else {
+    try { await fbAuth.signInWithEmailAndPassword(email, password); }
+    catch(e) { showAuthError(friendlyAuthError(e)); }
+  }
+}
+
+async function sendPasswordReset() {
+  const email = document.getElementById('auth-email')?.value.trim();
+  if (!email) { showAuthError('Enter your email address above first.'); return; }
+  try {
+    await fbAuth.sendPasswordResetEmail(email);
+    const el = document.getElementById('auth-error');
+    if (el) { el.textContent = '✓ Password reset email sent — check your inbox.'; el.style.background = 'var(--accent-light)'; el.style.color = 'var(--accent)'; el.style.display = 'block'; }
+  } catch(e) { showAuthError(friendlyAuthError(e)); }
+}
+
+function friendlyAuthError(e) {
+  const map = {
+    'auth/user-not-found':        'No account found with that email.',
+    'auth/wrong-password':        'Incorrect password. Try again or reset it.',
+    'auth/invalid-credential':    'Incorrect email or password.',
+    'auth/email-already-in-use':  'An account with this email already exists. Try signing in.',
+    'auth/invalid-email':         'Please enter a valid email address.',
+    'auth/weak-password':         'Password should be at least 6 characters.',
+    'auth/too-many-requests':     'Too many attempts. Please try again later.',
+    'auth/network-request-failed':'Network error — check your connection.',
+  };
+  return map[e.code] || e.message;
 }
 
 function signOut() {
