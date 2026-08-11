@@ -1166,7 +1166,19 @@ async function submitEmailAuth() {
     catch(e) { showAuthError(friendlyAuthError(e)); }
   } else {
     try { await fbAuth.signInWithEmailAndPassword(email, password); }
-    catch(e) { showAuthError(friendlyAuthError(e)); }
+    catch(e) {
+      // If wrong password or invalid credential, check if this email uses Google instead
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        try {
+          const methods = await fbAuth.fetchSignInMethodsForEmail(email);
+          if (methods.includes('google.com')) {
+            showAuthError('This account was created with Google. Use "Continue with Google" below to sign in.');
+            return;
+          }
+        } catch(_) {}
+      }
+      showAuthError(friendlyAuthError(e));
+    }
   }
 }
 
