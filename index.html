@@ -4407,6 +4407,8 @@ async function executeDelete() {
       }
 
       await batch.commit();
+      // Delete the Firebase Auth record so the email is freed up immediately
+      try { await user.delete(); } catch(e) { console.warn('Auth record not deleted:', e.code); }
       await fbAuth.signOut();
       window.location.reload();
 
