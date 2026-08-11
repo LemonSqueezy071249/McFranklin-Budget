@@ -275,17 +275,21 @@
   .desktop-only { display: table-cell; }
   @media (max-width: 640px) {
     .app { padding: 1rem 1rem 5rem; }
-    header { padding: 0.9rem 1.1rem; flex-wrap: wrap; gap: 6px; }
+    header { padding: 0.9rem 1.1rem; flex-wrap: nowrap; gap: 6px; }
     header h1 { font-size: 1.15rem; }
+    .header-right { gap: 6px; }
+    #conn-indicator { display: none; }
+    .user-avatar { width: 26px; height: 26px; font-size: 11px; }
+    #header-signout { font-size: 11px; padding: 3px 8px; }
 
     /* Tabs — scrollable pill strip */
     .tabs { padding: 3px; gap: 1px; }
     .tab { padding: 6px 11px; font-size: 12px; }
 
-    /* Summary cards — 2-up */
+    /* Summary cards — 2-up, compact value text */
     .summary-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
     .summary-card { padding: 0.85rem 1rem; }
-    .summary-card .value { font-size: 1.35rem; }
+    .summary-card .value { font-size: 1.2rem; }
     .summary-card .label { font-size: 10px; }
 
     /* Period toggle — horizontal scroll, no wrap */
@@ -328,6 +332,7 @@
     .expense-table tr.expense-data-row td { border-bottom: none !important; }
     .desktop-only { display: none !important; }
     .expense-table tr.expense-data-row td.exp-card-main { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 12px 6px; gap: 8px; }
+    .exp-card-amount { white-space: nowrap; flex-shrink: 0; }
     .expense-table tr.expense-data-row td.exp-card-meta { display: flex; align-items: center; gap: 8px; padding: 0 12px 10px; flex-wrap: wrap; }
     .expense-table tr.expense-data-row td.exp-card-actions { display: flex; justify-content: flex-end; gap: 4px; padding: 6px 8px 8px; border-top: 1px solid var(--border); }
     /* Show date inside card meta on mobile */
@@ -2306,8 +2311,8 @@ function renderExpenseTable() {
       </td>
       <td class="exp-card-meta">
         ${catBadge}
-        <span style="font-size:12px;color:var(--muted);">${escHtml(e.who||'')}</span>
-        <span style="font-size:12px;color:var(--muted);">${e.date||''}</span>
+        <span style="font-size:12px;color:var(--muted);white-space:nowrap;">${escHtml(e.who||'')}</span>
+        <span style="font-size:12px;color:var(--muted);white-space:nowrap;margin-left:auto;">${e.date||''}</span>
       </td>
       <td class="exp-card-actions">
         ${e.recurringId ? `<button class="recur-btn" title="Manage recurring" onclick="openRecurModal(${idx})">↻</button>` : ''}
