@@ -453,7 +453,23 @@
       <span id="auth-submit-label">Sign in</span>
     </button>
 
-    <button id="forgot-btn" onclick="sendPasswordReset()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);font-family:var(--sans);margin-bottom:1rem;">Forgot password?</button>
+    <button id="forgot-btn" onclick="openForgotModal()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);font-family:var(--sans);margin-bottom:1rem;">Forgot password?</button>
+
+    <!-- Forgot password modal -->
+    <div id="forgot-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;align-items:center;justify-content:center;padding:1rem;">
+      <div style="background:var(--surface);border-radius:var(--radius-lg);padding:1.75rem;max-width:400px;width:100%;box-shadow:var(--shadow-lg);">
+        <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:0.35rem;">Reset your password</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.6;">Enter the email address you signed up with and we'll send you a reset link.</p>
+        <div id="forgot-error" style="display:none;border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;margin-bottom:10px;"></div>
+        <input type="email" id="forgot-email" placeholder="Email address"
+          style="width:100%;font-size:14px;padding:10px 14px;border-radius:var(--radius);border:1.5px solid var(--border-strong);font-family:var(--sans);background:var(--surface);margin-bottom:10px;"
+          onkeydown="if(event.key==='Enter')submitForgotPassword()">
+        <div style="display:flex;gap:8px;">
+          <button onclick="submitForgotPassword()" class="btn btn-primary" style="flex:1;">Send reset email</button>
+          <button onclick="closeForgotModal()" class="btn btn-secondary" style="flex:1;">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Divider -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;">
@@ -1167,8 +1183,8 @@ async function submitEmailAuth() {
   } else {
     try { await fbAuth.signInWithEmailAndPassword(email, password); }
     catch(e) {
-      // If wrong password or invalid credential, check if this email uses Google instead
-      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found') {
+        // Try to detect if this is a Google account
         try {
           const methods = await fbAuth.fetchSignInMethodsForEmail(email);
           if (methods.includes('google.com')) {
@@ -1176,20 +1192,63 @@ async function submitEmailAuth() {
             return;
           }
         } catch(_) {}
+        // Either wrong password, or email enumeration protection is on and we can't tell —
+        // show a message that covers both cases
+        showAuthError('Email or password is incorrect.');
+        return;
       }
       showAuthError(friendlyAuthError(e));
     }
   }
 }
 
-async function sendPasswordReset() {
-  const email = document.getElementById('auth-email')?.value.trim();
-  if (!email) { showAuthError('Enter your email address above first.'); return; }
+function openForgotModal() {
+  const modal = document.getElementById('forgot-modal');
+  const input = document.getElementById('forgot-email');
+  const errEl = document.getElementById('forgot-error');
+  // Pre-fill with whatever email is already in the sign-in field
+  if (input) input.value = document.getElementById('auth-email')?.value || '';
+  if (errEl) errEl.style.display = 'none';
+  modal.style.display = 'flex';
+  setTimeout(() => input?.focus(), 50);
+}
+
+function closeForgotModal() {
+  document.getElementById('forgot-modal').style.display = 'none';
+}
+
+function showForgotMsg(msg, isSuccess) {
+  const el = document.getElementById('forgot-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.background = isSuccess ? 'var(--accent-light)' : 'var(--danger-light)';
+  el.style.color = isSuccess ? 'var(--accent)' : 'var(--danger)';
+  el.style.display = 'block';
+}
+
+async function submitForgotPassword() {
+  const email = document.getElementById('forgot-email')?.value.trim();
+  if (!email) { showForgotMsg('Please enter your email address.', false); return; }
+
   try {
     await fbAuth.sendPasswordResetEmail(email);
-    const el = document.getElementById('auth-error');
-    if (el) { el.textContent = '✓ Password reset email sent — check your inbox.'; el.style.background = 'var(--accent-light)'; el.style.color = 'var(--accent)'; el.style.display = 'block'; }
-  } catch(e) { showAuthError(friendlyAuthError(e)); }
+    showForgotMsg('✓ Reset email sent — check your inbox.', true);
+    setTimeout(closeForgotModal, 3000);
+  } catch(e) {
+    if (e.code === 'auth/user-not-found') {
+      // Check if it might be a Google account
+      try {
+        const methods = await fbAuth.fetchSignInMethodsForEmail(email);
+        if (methods.includes('google.com')) {
+          showForgotMsg('This email is linked to a Google account — use "Continue with Google" to sign in instead.', false);
+          return;
+        }
+      } catch(_) {}
+      showForgotMsg('No account found with that email address.', false);
+    } else {
+      showForgotMsg(friendlyAuthError(e), false);
+    }
+  }
 }
 
 function friendlyAuthError(e) {
