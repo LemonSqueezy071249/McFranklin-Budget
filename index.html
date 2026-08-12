@@ -1231,23 +1231,25 @@ async function submitForgotPassword() {
   if (!email) { showForgotMsg('Please enter your email address.', false); return; }
 
   try {
+    // Check which providers this email uses before attempting reset
+    const methods = await fbAuth.fetchSignInMethodsForEmail(email);
+
+    if (methods.length === 0) {
+      showForgotMsg('No account found with that email address.', false);
+      return;
+    }
+    if (methods.includes('google.com') && !methods.includes('password')) {
+      showForgotMsg('This email is linked to a Google account — use "Continue with Google" to sign in instead.', false);
+      return;
+    }
+
+    // Has a password provider — send the reset
     await fbAuth.sendPasswordResetEmail(email);
     showForgotMsg('✓ Reset email sent — check your inbox.', true);
     setTimeout(closeForgotModal, 3000);
+
   } catch(e) {
-    if (e.code === 'auth/user-not-found') {
-      // Check if it might be a Google account
-      try {
-        const methods = await fbAuth.fetchSignInMethodsForEmail(email);
-        if (methods.includes('google.com')) {
-          showForgotMsg('This email is linked to a Google account — use "Continue with Google" to sign in instead.', false);
-          return;
-        }
-      } catch(_) {}
-      showForgotMsg('No account found with that email address.', false);
-    } else {
-      showForgotMsg(friendlyAuthError(e), false);
-    }
+    showForgotMsg(friendlyAuthError(e), false);
   }
 }
 
