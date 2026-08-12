@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.nectra.budget",
+    "sha256_cert_fingerprints": ["51:58:E4:B7:A8:68:84:ED:83:0C:E5:DF:A4:F6:FD:17:B9:7D:8C:78:1D:0F:79:AD:93:1A:A3:40:4A:BE:7E:61"]
+  }
+}]
