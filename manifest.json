@@ -29,7 +29,7 @@
       "files": [
         {
           "name": "file",
-          "accept": [".csv", ".qfx", ".ofx", ".qbo", "text/csv", "application/x-ofx"]
+          "accept": ["text/csv", "application/x-ofx", "application/vnd.intu.qfx", "application/vnd.intu.qbo"]
         }
       ]
     }
