@@ -1,5 +1,5 @@
 // Nectra Service Worker
-const CACHE_NAME = 'nectra-v2';
+const CACHE_NAME = 'nectra-v3';
 
 const SHELL_URLS = [
   './',
@@ -35,11 +35,9 @@ self.addEventListener('fetch', event => {
         const formData = await event.request.formData();
         const file = formData.get('file');
         if (file) {
-          // Convert file to object URL and store in sessionStorage via client
           const buffer = await file.arrayBuffer();
           const blob   = new Blob([buffer], { type: file.type });
           const objUrl = URL.createObjectURL(blob);
-          // Send to all clients
           const clients = await self.clients.matchAll({ includeUncontrolled: true });
           const info = JSON.stringify({ url: objUrl, name: file.name, type: file.type });
           for (const client of clients) {
@@ -47,32 +45,52 @@ self.addEventListener('fetch', event => {
           }
         }
       } catch(e) { console.warn('Share target SW error', e); }
-      // Redirect to app
       return Response.redirect('/?share-target', 303);
     })());
     return;
   }
 
-  // Skip Firebase/Google API calls
+  // Skip Firebase/Google API calls — always network
   if (url.hostname.includes('googleapis.com') ||
       url.hostname.includes('firebase') ||
       url.hostname.includes('gstatic.com')) return;
 
-  // Cache-first for app shell
   if (event.request.method === 'GET') {
-    event.respondWith(
-      caches.match(event.request).then(cached => {
-        if (cached) return cached;
-        return fetch(event.request).then(response => {
-          if (response.ok && response.type === 'basic') {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
-        }).catch(() => {
-          if (event.request.mode === 'navigate') return caches.match('./index.html');
-        });
-      })
-    );
+    const isHTML = event.request.mode === 'navigate' ||
+                   url.pathname.endsWith('.html') ||
+                   url.pathname.endsWith('/');
+
+    if (isHTML) {
+      // Stale-while-revalidate for HTML:
+      // 1. Serve cached version instantly
+      // 2. Fetch fresh copy in background and update cache for next time
+      event.respondWith(
+        caches.open(CACHE_NAME).then(cache =>
+          cache.match(event.request).then(cached => {
+            const fetchPromise = fetch(event.request).then(response => {
+              if (response.ok) cache.put(event.request, response.clone());
+              return response;
+            }).catch(() => cached);
+
+            // Return cached immediately, update in background
+            return cached || fetchPromise;
+          })
+        )
+      );
+    } else {
+      // Cache-first for other assets (icons, manifest etc.)
+      event.respondWith(
+        caches.match(event.request).then(cached => {
+          if (cached) return cached;
+          return fetch(event.request).then(response => {
+            if (response.ok && response.type === 'basic') {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            }
+            return response;
+          }).catch(() => caches.match('./index.html'));
+        })
+      );
+    }
   }
 });
