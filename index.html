@@ -1582,11 +1582,15 @@ async function renderFamilyMembers() {
 async function removeFamilyMember(uid, name) {
   if (!confirm(`Remove ${name} from the family? They will lose access immediately and need a new invite to rejoin.`)) return;
   try {
+    // Remove from family members map
     await familyRef.update({
       [`members.${uid}`]: firebase.firestore.FieldValue.delete()
     });
-    // Also delete their /users/{uid} doc so they hit onboarding if they open the app
-    await fbDb.collection('users').doc(uid).delete();
+    // Clear familyId from their user doc so they hit onboarding on next open
+    // Don't delete the whole doc in case they join another family in future
+    await fbDb.collection('users').doc(uid).update({
+      familyId: firebase.firestore.FieldValue.delete()
+    });
     renderFamilyMembers();
   } catch(e) {
     alert('Could not remove member: ' + e.message);
