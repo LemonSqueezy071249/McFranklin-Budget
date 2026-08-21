@@ -1330,6 +1330,20 @@ function initFirebase() {
       console.error('Failed to look up user family', e);
     }
 
+    // Verify they're still a member of that family
+    if (familyId) {
+      try {
+        const famSnap = await fbDb.collection('families').doc(familyId).get();
+        if (!famSnap.exists || !famSnap.data().members?.[user.uid]) {
+          // No longer a member — treat as no family
+          familyId = null;
+        }
+      } catch(e) {
+        // Permission denied means they were removed — treat as no family
+        familyId = null;
+      }
+    }
+
     if (!familyId) {
       // User has no family — check for invite in URL, else show no-family screen
       hideSplash();
@@ -1582,14 +1596,12 @@ async function renderFamilyMembers() {
 async function removeFamilyMember(uid, name) {
   if (!confirm(`Remove ${name} from the family? They will lose access immediately and need a new invite to rejoin.`)) return;
   try {
-    // Remove from family members map
+    // Remove from family members map — the Firestore listener on their device
+    // will detect they're no longer a member and sign them out automatically.
+    // Their /users/{uid} doc keeps the old familyId but the family read will
+    // be blocked by rules since they're no longer in the members map.
     await familyRef.update({
       [`members.${uid}`]: firebase.firestore.FieldValue.delete()
-    });
-    // Clear familyId from their user doc so they hit onboarding on next open
-    // Don't delete the whole doc in case they join another family in future
-    await fbDb.collection('users').doc(uid).update({
-      familyId: firebase.firestore.FieldValue.delete()
     });
     renderFamilyMembers();
   } catch(e) {
