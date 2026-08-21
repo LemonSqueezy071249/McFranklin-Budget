@@ -4535,7 +4535,30 @@ async function executeDelete() {
 
       await batch.commit();
       // Delete the Firebase Auth record so the email is freed up immediately
-      try { await user.delete(); } catch(e) { console.warn('Auth record not deleted:', e.code); }
+      try {
+        await user.delete();
+      } catch(e) {
+        if (e.code === 'auth/requires-recent-login') {
+          // Session too old — re-authenticate then retry
+          try {
+            const provider = user.providerData[0]?.providerId;
+            if (provider === 'google.com') {
+              await user.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
+            } else {
+              // For email/password, prompt for password
+              const password = prompt('Please enter your password to confirm account deletion:');
+              if (!password) { await fbAuth.signOut(); window.location.reload(); return; }
+              const credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
+              await user.reauthenticateWithCredential(credential);
+            }
+            await user.delete();
+          } catch(e2) {
+            console.warn('Could not re-authenticate to delete auth record:', e2.code);
+          }
+        } else {
+          console.warn('Auth record not deleted:', e.code);
+        }
+      }
       await fbAuth.signOut();
       window.location.reload();
 
