@@ -1390,13 +1390,12 @@ function generateInviteLink() {
 
 async function joinFamilyViaInvite(user, familyId) {
   try {
-    const famRef  = fbDb.collection('families').doc(familyId);
-    const famSnap = await famRef.get();
-    if (!famSnap.exists) {
-      showNoFamilyScreen(user, 'Invite link is invalid or expired.');
-      return;
-    }
-    // Add user to family members
+    const famRef = fbDb.collection('families').doc(familyId);
+
+    // Don't try to read the family doc first — new user isn't a member yet
+    // and the read would be blocked by Firestore rules.
+    // Just attempt the update directly — if the family doesn't exist it'll fail
+    // and we catch it below.
     await famRef.update({
       [`members.${user.uid}`]: {
         email: user.email,
@@ -1405,6 +1404,7 @@ async function joinFamilyViaInvite(user, familyId) {
         joinedAt: firebase.firestore.FieldValue.serverTimestamp()
       }
     });
+
     // Create user doc
     await fbDb.collection('users').doc(user.uid).set({
       familyId,
@@ -1412,11 +1412,16 @@ async function joinFamilyViaInvite(user, familyId) {
       displayName: user.displayName || '',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+
     // Clear invite param from URL and reload
     window.history.replaceState({}, '', window.location.pathname);
     window.location.reload();
   } catch(e) {
-    showNoFamilyScreen(user, 'Failed to join: ' + e.message);
+    if (e.code === 'not-found') {
+      showNoFamilyScreen(user, 'Invite link is invalid or expired.');
+    } else {
+      showNoFamilyScreen(user, 'Failed to join: ' + e.message);
+    }
   }
 }
 
