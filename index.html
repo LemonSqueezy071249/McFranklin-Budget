@@ -1069,6 +1069,16 @@ const db = {
   listenForChanges() {
     familyRef.onSnapshot(snap => {
       if (!snap.exists || snap.metadata.hasPendingWrites) return;
+
+      // Check if the current user is still a member — kick them out if removed
+      const currentUid = fbAuth.currentUser?.uid;
+      const members = snap.data().members || {};
+      if (currentUid && !members[currentUid]) {
+        // User has been removed from the family — sign out immediately
+        fbAuth.signOut().then(() => window.location.reload());
+        return;
+      }
+
       const raw = snap.data().data || {};
       const prev = JSON.stringify({ e: state.expenses.length, c: state.categories.length });
       applyFirestoreData(raw);
