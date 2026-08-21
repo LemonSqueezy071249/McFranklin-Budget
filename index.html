@@ -1550,7 +1550,8 @@ async function renderFamilyMembers() {
     const data = snap.data();
     const members = data.members || {};
     const currentUid = fbAuth.currentUser?.uid;
-    const isOwner = data.meta?.ownerUid === currentUid;
+    const isOwner = data.meta?.ownerUid === currentUid ||
+                    members[currentUid]?.role === 'owner';
 
     el.innerHTML = Object.entries(members).map(([uid, m]) => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
