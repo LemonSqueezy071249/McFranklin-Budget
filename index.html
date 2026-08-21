@@ -1547,17 +1547,40 @@ async function renderFamilyMembers() {
   try {
     const snap = await familyRef.get();
     if (!snap.exists) return;
-    const members = snap.data().members || {};
+    const data = snap.data();
+    const members = data.members || {};
     const currentUid = fbAuth.currentUser?.uid;
+    const isOwner = data.meta?.ownerUid === currentUid;
+
     el.innerHTML = Object.entries(members).map(([uid, m]) => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
         <div>
           <div style="font-size:14px;font-weight:500;">${escHtml(m.displayName || m.email)}</div>
           <div style="font-size:12px;color:var(--muted);">${escHtml(m.email)} · ${m.role}</div>
         </div>
-        ${uid === currentUid ? '<span style="font-size:12px;color:var(--muted);">You</span>' : ''}
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${uid === currentUid
+            ? '<span style="font-size:12px;color:var(--muted);">You</span>'
+            : isOwner && m.role !== 'owner'
+              ? `<button class="del-btn" onclick="removeFamilyMember('${uid}', '${escHtml(m.displayName || m.email)}')" title="Remove from family">✕</button>`
+              : ''}
+        </div>
       </div>`).join('');
   } catch(e) { el.textContent = 'Could not load members.'; }
+}
+
+async function removeFamilyMember(uid, name) {
+  if (!confirm(`Remove ${name} from the family? They will lose access immediately and need a new invite to rejoin.`)) return;
+  try {
+    await familyRef.update({
+      [`members.${uid}`]: firebase.firestore.FieldValue.delete()
+    });
+    // Also delete their /users/{uid} doc so they hit onboarding if they open the app
+    await fbDb.collection('users').doc(uid).delete();
+    renderFamilyMembers();
+  } catch(e) {
+    alert('Could not remove member: ' + e.message);
+  }
 }
 
 async function copyInviteLink() {
