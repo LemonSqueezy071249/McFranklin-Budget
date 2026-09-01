@@ -602,6 +602,10 @@
         <button class="filter-chip active" id="exp-filter-all" onclick="setExpFilter(null,event)">All</button>
         <button class="filter-chip" id="exp-filter-uncategorized" onclick="setExpFilter('__uncategorized__',event)" style="border-color:#E09A2A; color:#B7610A;">⚑ Uncategorized</button>
         <span id="exp-filter-chips"></span>
+        <select id="exp-cat-filter" onchange="setCategoryFilter(this.value)"
+          style="font-size:12px;padding:5px 8px;border-radius:20px;border:1.5px solid var(--border-strong);background:var(--surface);color:var(--text);font-family:var(--sans);cursor:pointer;">
+          <option value="">Category…</option>
+        </select>
       </div>
     </div>
     <div id="exp-count" style="font-size:13px; color:var(--muted); margin-bottom:8px;"></div>
@@ -1838,13 +1842,46 @@ function setExpCustomMonth(val) {
   renderExpenseTable();
 }
 
+function setCategoryFilter(catName) {
+  if (!catName) {
+    setExpFilter(null, { currentTarget: document.getElementById('exp-filter-all') });
+  } else {
+    // Deactivate all chips
+    document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
+      .forEach(b => b.classList.remove('active'));
+    state.expFilter = '__category__:' + catName;
+    saveExpPrefs();
+    renderExpenseTable();
+    updatePeriodLabel();
+  }
+}
+
+function populateCatFilterDropdown() {
+  const sel = document.getElementById('exp-cat-filter');
+  if (!sel) return;
+  const current = state.expFilter?.startsWith('__category__:')
+    ? state.expFilter.slice('__category__:'.length) : '';
+  sel.innerHTML = '<option value="">Category…</option>' +
+    state.categories.map(c =>
+      `<option value="${escHtml(c.name)}" ${c.name === current ? 'selected' : ''}>${escHtml(c.name)}</option>`
+    ).join('');
+  // Reset dropdown if not a category filter
+  if (!state.expFilter?.startsWith('__category__:')) sel.value = '';
+}
+
 function setExpFilter(name, e) {
   state.expFilter = name;
   // Update chip active states
   document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
     .forEach(b => b.classList.remove('active'));
-  e.currentTarget.classList.add('active');
+  if (e?.currentTarget) e.currentTarget.classList.add('active');
+  else if (!name) document.getElementById('exp-filter-all')?.classList.add('active');
+  // Reset category dropdown when switching away from category filter
+  const catSel = document.getElementById('exp-cat-filter');
+  if (catSel && !name?.startsWith('__category__:')) catSel.value = '';
+  saveExpPrefs();
   renderExpenseTable();
+  updatePeriodLabel();
 }
 
 function renderExpFilterChips() {
@@ -2436,6 +2473,7 @@ function setSort(col) {
 
 function renderExpenseTable() {
   renderExpFilterChips();
+  populateCatFilterDropdown();
   updateUncatBadge();
   const allBtn = document.getElementById('exp-filter-all');
   const uncBtn = document.getElementById('exp-filter-uncategorized');
