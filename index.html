@@ -1932,6 +1932,11 @@ function populateCatFilterDropdown() {
   }
 }
 
+function saveExpPrefs() {
+  localStorage.setItem(prefsKey('expPeriod'), state.expPeriod || 'monthly');
+  localStorage.setItem(prefsKey('expFilter'), state.expFilter || '');
+}
+
 function setExpFilter(name, e) {
   state.expFilter = name;
   // Update chip active states
