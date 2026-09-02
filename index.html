@@ -3630,6 +3630,7 @@ async function importQFX() {
     ws[state._watchedPendingKey] = 'imported';
     setWatchedFileState(ws);
     state._watchedPendingKey = null;
+    scanWatchedFolders();
   }
 
   const uncat = added - autoCat - refunds;
@@ -3838,6 +3839,15 @@ async function importCSV() {
   document.getElementById('csv-preview').style.display = 'none';
   document.getElementById('csv-input').value = '';
   state.csvRows = []; state.csvHeaders = [];
+
+  // Mark watched file as imported now that import actually completed
+  if (state._watchedPendingKey) {
+    const ws = getWatchedFileState();
+    ws[state._watchedPendingKey] = 'imported';
+    setWatchedFileState(ws);
+    state._watchedPendingKey = null;
+    scanWatchedFolders();
+  }
 
   const uncat = added - autoCat - refunds;
   const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
