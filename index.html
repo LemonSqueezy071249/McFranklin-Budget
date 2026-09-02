@@ -596,29 +596,27 @@
           <button class="toggle-btn" onclick="setExpPeriod('custom',event)">Custom</button>
           <select id="exp-month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setExpCustomMonth(this.value)"></select>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
-          <input type="text" id="search-input" placeholder="Search..." style="min-width:120px; max-width:180px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
-          <!-- Compact searchable category filter -->
-          <div id="cat-filter-wrap" style="position:relative;">
-            <button id="cat-filter-btn" onclick="toggleCatFilterDropdown()"
-              style="display:flex;align-items:center;gap:6px;padding:7px 12px;font-size:13px;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius);cursor:pointer;font-family:var(--sans);color:var(--muted);white-space:nowrap;">
-              <span id="cat-filter-label">Category</span>
-              <span style="font-size:10px;">▾</span>
-            </button>
-            <div id="cat-filter-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-lg);min-width:200px;z-index:100;overflow:hidden;">
-              <div style="padding:8px;">
-                <input type="text" id="cat-filter-search" placeholder="Search categories..." oninput="renderCatFilterOptions()"
-                  style="width:100%;font-size:13px;padding:6px 8px;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);font-family:var(--sans);">
-              </div>
-              <div id="cat-filter-options" style="max-height:220px;overflow-y:auto;padding:0 4px 6px;"></div>
-            </div>
-          </div>
-        </div>
+        <input type="text" id="search-input" placeholder="Search..." style="min-width:120px; max-width:180px; padding:7px 12px; font-size:13px; flex-shrink:0;" oninput="renderExpenseTable()">
       </div>
       <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
         <button class="filter-chip active" id="exp-filter-all" onclick="setExpFilter(null,event)">All</button>
         <button class="filter-chip" id="exp-filter-uncategorized" onclick="setExpFilter('__uncategorized__',event)" style="border-color:#E09A2A; color:#B7610A;">⚑ Uncategorized</button>
         <span id="exp-filter-chips"></span>
+        <!-- Compact searchable category filter — right-aligned in the chip row -->
+        <div id="cat-filter-wrap" style="position:relative; margin-left:auto;">
+          <button id="cat-filter-btn" onclick="toggleCatFilterDropdown()"
+            style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:20px;cursor:pointer;font-family:var(--sans);color:var(--muted);white-space:nowrap;">
+            <span id="cat-filter-label">Category</span>
+            <span style="font-size:10px;">▾</span>
+          </button>
+          <div id="cat-filter-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-lg);min-width:200px;z-index:100;overflow:hidden;">
+            <div style="padding:8px;">
+              <input type="text" id="cat-filter-search" placeholder="Search categories..." oninput="renderCatFilterOptions()"
+                style="width:100%;font-size:13px;padding:6px 8px;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);font-family:var(--sans);">
+            </div>
+            <div id="cat-filter-options" style="max-height:220px;overflow-y:auto;padding:0 4px 6px;"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div id="exp-count" style="font-size:13px; color:var(--muted); margin-bottom:8px;"></div>
