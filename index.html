@@ -3131,6 +3131,13 @@ function initSearchableSelect() {
     selectContainer.classList.add('open');
     filterCategoryOptions('');
   });
+
+  input.addEventListener('click', function() {
+    if (!selectContainer.classList.contains('open')) {
+      selectContainer.classList.add('open');
+      filterCategoryOptions('');
+    }
+  });
   
   input.addEventListener('input', function() {
     filterCategoryOptions(this.value);
@@ -3159,6 +3166,11 @@ function initSearchableSelect() {
     setTimeout(() => {
       if (!selectContainer.contains(document.activeElement)) {
         selectContainer.classList.remove('open');
+        const hidden = selectContainer.querySelector('input[type="hidden"]');
+        const visInput = selectContainer.querySelector('.cat-search-input');
+        if (hidden && visInput && visInput.value !== hidden.value) {
+          visInput.value = hidden.value;
+        }
       }
     }, 100);
   });
@@ -3226,6 +3238,18 @@ function initDynamicSearchableSelects(selectId) {
     selectContainer.classList.add('open');
     filterDynamicCategoryOptions(selectId, '');
   });
+
+  // Also reopen on click, since the browser may not re-fire 'focus' if the
+  // input never actually lost focus after a previous option selection
+  // (mousedown preventDefault on the options list keeps focus in the input).
+  input.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!selectContainer.classList.contains('open')) {
+      this.value = '';
+      selectContainer.classList.add('open');
+      filterDynamicCategoryOptions(selectId, '');
+    }
+  });
   
   input.addEventListener('input', function(e) {
     e.stopPropagation();
@@ -3246,6 +3270,10 @@ function initDynamicSearchableSelects(selectId) {
     setTimeout(() => {
       if (!selectContainer.contains(document.activeElement)) {
         selectContainer.classList.remove('open');
+        const hidden = document.getElementById(selectId);
+        if (hidden && input.value !== hidden.value) {
+          input.value = hidden.value;
+        }
       }
     }, 100);
   });
