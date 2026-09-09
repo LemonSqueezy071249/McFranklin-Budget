@@ -1324,6 +1324,8 @@ function initFirebase() {
   fbAuth = firebase.auth();
   fbDb   = firebase.firestore();
 
+  let authResolved = false;
+
   fbAuth.onAuthStateChanged(async user => {
     const signinScreen = document.getElementById('signin-screen');
     const appRoot      = document.getElementById('app-root');
@@ -1331,14 +1333,32 @@ function initFirebase() {
     const headerSignout = document.getElementById('header-signout');
 
     if (!user) {
-      hideSplash();
-      signinScreen.style.display = 'flex';
-      appRoot.style.display = 'none';
-      state.connected = false;
-      setConnStatus(false);
-      if (headerSignout) headerSignout.style.display = 'none';
+      // Firebase can fire this callback with null once on page load before
+      // restoring a persisted session, then again with the real user.
+      // Wait a moment before showing sign-in so we don't flash it unnecessarily.
+      if (!authResolved) {
+        setTimeout(() => {
+          if (!fbAuth.currentUser) {
+            hideSplash();
+            signinScreen.style.display = 'flex';
+            appRoot.style.display = 'none';
+            state.connected = false;
+            setConnStatus(false);
+            if (headerSignout) headerSignout.style.display = 'none';
+          }
+        }, 400);
+      } else {
+        hideSplash();
+        signinScreen.style.display = 'flex';
+        appRoot.style.display = 'none';
+        state.connected = false;
+        setConnStatus(false);
+        if (headerSignout) headerSignout.style.display = 'none';
+      }
+      authResolved = true;
       return;
     }
+    authResolved = true;
 
     // Look up the user's family from /users/{uid}
     let familyId = null;
