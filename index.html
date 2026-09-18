@@ -898,7 +898,7 @@
     </div>
 
     <div style="margin-top:1.5rem; text-align:center;">
-      <span style="font-size:11px; color:var(--muted);">Nectra v1.46</span>
+      <span style="font-size:11px; color:var(--muted);">Nectra v1.47</span>
     </div>
 
   </div>
@@ -1374,6 +1374,18 @@ function initFirebase() {
       return;
     }
     authResolved = true;
+
+    // We have a confirmed real user — immediately hide the sign-in screen and
+    // show the splash/loading state rather than leaving the stale sign-in
+    // screen visible during the async family lookup below. Without this,
+    // there's a real network-latency gap (Firestore reads) where the old
+    // sign-in screen sits there after the Google popup closes.
+    {
+      const s = document.getElementById('signin-screen');
+      if (s) s.style.display = 'none';
+      const splash = document.getElementById('splash-screen');
+      if (splash) { splash.style.display = 'flex'; splash.classList.remove('hiding'); }
+    }
 
     // Look up the user's family from /users/{uid}
     let familyId = null;
