@@ -898,7 +898,7 @@
     </div>
 
     <div style="margin-top:1.5rem; text-align:center;">
-      <span style="font-size:11px; color:var(--muted);">Nectra v1.44</span>
+      <span style="font-size:11px; color:var(--muted);">Nectra v1.45</span>
     </div>
 
   </div>
@@ -1337,16 +1337,26 @@ function initFirebase() {
       // restoring a persisted session, then again with the real user.
       // Wait a moment before showing sign-in so we don't flash it unnecessarily.
       if (!authResolved) {
-        setTimeout(() => {
-          if (!fbAuth.currentUser) {
+        // Poll a few times over ~2s rather than a single fixed delay —
+        // Firebase's session restore time varies with connection speed.
+        // Only show sign-in if still genuinely no user after the full window.
+        let checks = 0;
+        const maxChecks = 10;
+        const poll = () => {
+          checks++;
+          if (fbAuth.currentUser) return; // real user resolved — do nothing, its own callback handles the rest
+          if (checks >= maxChecks) {
             hideSplash();
             signinScreen.style.display = 'flex';
             appRoot.style.display = 'none';
             state.connected = false;
             setConnStatus(false);
             if (headerSignout) headerSignout.style.display = 'none';
+          } else {
+            setTimeout(poll, 200);
           }
-        }, 400);
+        };
+        setTimeout(poll, 200);
       } else {
         hideSplash();
         signinScreen.style.display = 'flex';
