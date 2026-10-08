@@ -633,7 +633,7 @@
         </div>
         <div class="form-group">
           <label class="field-label">Amount ($)</label>
-          <input type="number" id="exp-amount" placeholder="0.00" step="0.01">
+          <input type="text" inputmode="decimal" data-math autocomplete="off" id="exp-amount" placeholder="0.00">
         </div>
         <div class="form-group">
           <label class="field-label">Category</label>
@@ -898,7 +898,7 @@
     </div>
 
     <div style="margin-top:1.5rem; text-align:center;">
-      <span style="font-size:11px; color:var(--muted);">Nectra v1.47</span>
+      <span style="font-size:11px; color:var(--muted);">Nectra v1.48</span>
     </div>
 
   </div>
@@ -2768,7 +2768,7 @@ function renderSplitEditor(idx) {
   let linesHtml = lines.map((l, li) => `
     <div class="split-line" id="split-line-${li}">
       ${createSearchableSelectHTML(`split-cat-${li}`, l.category)}
-      <input type="number" placeholder="Amount" value="${l.amount}" step="0.01"
+      <input type="text" inputmode="decimal" data-math autocomplete="off" placeholder="Amount" value="${l.amount}"
         onchange="updateSplitLine(${li},'amount',this.value)"
         onblur="autoFillLast(${li})" style="font-size: 13px; padding: 6px 9px;">
       <button class="del-btn" onclick="removeSplitLine(${li})" style="font-size:14px;">✕</button>
@@ -2809,6 +2809,11 @@ function renderSplitEditor(idx) {
 }
 
 function updateSplitLine(li, key, val) {
+  if (key === 'amount') {
+    // Evaluate any math (e.g. 125-21.10) and store the plain result
+    const n = parseAmount(val);
+    val = isNaN(n) ? '' : n.toFixed(2);
+  }
   splitState.lines[li][key] = val;
   renderSplitEditor(splitState.idx);
 }
@@ -2832,7 +2837,7 @@ function addSplitLine() {
   // Focus the new amount field
   setTimeout(() => {
     const lines = document.querySelectorAll('.split-line');
-    lines[lines.length - 1]?.querySelector('input[type=number]')?.focus();
+    lines[lines.length - 1]?.querySelector('input[data-math]')?.focus();
   }, 30);
 }
 
@@ -2900,7 +2905,7 @@ function openEdit(idx) {
     </div>
     <div class="form-group">
       <label class="field-label">Amount ($)</label>
-      <input type="number" id="edit-amount-${idx}" value="${e.amount||''}" step="0.01">
+      <input type="text" inputmode="decimal" data-math autocomplete="off" id="edit-amount-${idx}" value="${e.amount||''}">
     </div>
     <div class="form-group">
       <label class="field-label">Category</label>
@@ -2953,7 +2958,7 @@ function closeEdit(idx) {
 
 async function saveEdit(idx) {
   const date = document.getElementById(`edit-date-${idx}`)?.value;
-  const amount = parseFloat(document.getElementById(`edit-amount-${idx}`)?.value);
+  const amount = parseAmount(document.getElementById(`edit-amount-${idx}`)?.value);
   const category = document.getElementById(`edit-cat-${idx}`)?.value;
   const who = document.getElementById(`edit-who-${idx}`)?.value;
   const description = document.getElementById(`edit-desc-${idx}`)?.value.trim();
@@ -3375,7 +3380,7 @@ function updateCategorySelectsInForms() {
 // --- Add Transaction ---
 async function addExpense() {
   const date = document.getElementById('exp-date').value;
-  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const amount = parseAmount(document.getElementById('exp-amount').value);
   const category = document.getElementById('exp-cat').value;
   const description = document.getElementById('exp-desc').value.trim();
   const memo = document.getElementById('exp-memo').value.trim();
@@ -4004,7 +4009,7 @@ function renderBudgetPlanner() {
         '<div style="text-align:right;font-size:13px;">' + (actual > 0 ? '$'+fmt(actual) : '<span style="color:var(--muted)">—</span>') + '</div>' +
         '<div style="text-align:right;font-size:13px;font-weight:500;color:' + (over?'var(--danger)':'var(--green-dark)') + ';">' + (diff === 0 ? '—' : (over?'+':'-')+'$'+fmt(Math.abs(diff))) + '</div>' +
         '<div style="text-align:right;">' +
-          '<input type="number" class="planner-input" data-name="' + escHtml(c.name) + '" data-period="' + (c.period||'monthly') + '"' +
+          '<input type="text" inputmode="decimal" data-math autocomplete="off" class="planner-input" data-name="' + escHtml(c.name) + '" data-period="' + (c.period||'monthly') + '"' +
           ' value="' + activeBudget.toFixed(2) + '" min="0" step="0.01"' +
           ' style="width:100%;font-size:13px;padding:4px 6px;text-align:right;"' +
           ' oninput="updatePlannerTotals()">' +
@@ -4033,7 +4038,7 @@ function updatePlannerTotals() {
     totalActual += actualByCategory[c.name] || 0;
   });
   document.querySelectorAll('.planner-input').forEach(function(inp) {
-    totalNew += parseFloat(inp.value) || 0;
+    totalNew += parseAmount(inp.value) || 0;
   });
   const diff = totalNew - totalLastBudget;
   const over = diff > 0;
@@ -4060,7 +4065,7 @@ async function saveBudgetPlan() {
   const newCategories = state.categories.map(function(c) {
     const input = Array.from(inputs).find(function(inp) { return inp.dataset.name === c.name; });
     if (!input) return c;
-    const annualNew = parseFloat(input.value) || 0;
+    const annualNew = parseAmount(input.value) || 0;
     const newBudget = c.period === 'yearly' ? annualNew : annualNew / 12;
     return Object.assign({}, c, { budget: parseFloat(newBudget.toFixed(2)) });
   });
@@ -4123,7 +4128,7 @@ function renderBudgetEditor() {
           ondragend="onDragEnd(event)">
         <span class="item-drag-handle" title="Drag to reorder" draggable="true" ondragstart="onItemDragStart(event,${c._i})">⠿</span>
         <input type="text" value="${escHtml(c.name)}" onchange="updateCat(${c._i},'name',this.value)" placeholder="Category name">
-        <input type="number" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00" step="0.01" min="0">
+        <input type="text" inputmode="decimal" data-math autocomplete="off" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00">
         <select class="period-sel" onchange="updateCat(${c._i},'period',this.value)">
           <option value="monthly" ${c.period==='monthly'?'selected':''}>Monthly</option>
           <option value="yearly" ${c.period==='yearly'?'selected':''}>Yearly</option>
@@ -4153,7 +4158,7 @@ function updateCat(i, key, val) {
       if (state.connected) db.saveExpenses(state.expenses).catch(() => {});
     }
   }
-  state.categories[i][key] = key === 'budget' ? parseFloat(val)||0 : val;
+  state.categories[i][key] = key === 'budget' ? parseAmount(val)||0 : val;
 }
 
 function removeCat(i) {
@@ -4904,7 +4909,7 @@ function showModifyFutureForm(idx) {
   document.getElementById('recur-modal-actions').innerHTML =
     '<div class="form-grid" style="margin-bottom:1rem;">' +
     '<div class="form-group"><label class="field-label">Amount</label>' +
-    '<input type="number" id="recur-edit-amount" value="' + e.amount + '" step="0.01"></div>' +
+    '<input type="text" inputmode="decimal" data-math autocomplete="off" id="recur-edit-amount" value="' + e.amount + '"></div>' +
     '<div class="form-group"><label class="field-label">Category</label>' +
     '<select id="recur-edit-cat">' + catOptions + '</select></div>' +
     '<div class="form-group full"><label class="field-label">Description</label>' +
@@ -4916,7 +4921,7 @@ async function applyFutureModify(idx) {
   const e = state.expenses[idx];
   if (!e) return;
   const rid = e.recurringId;
-  const amount      = parseFloat(document.getElementById('recur-edit-amount')?.value);
+  const amount      = parseAmount(document.getElementById('recur-edit-amount')?.value);
   const category    = document.getElementById('recur-edit-cat')?.value;
   const description = document.getElementById('recur-edit-desc')?.value.trim();
   if (isNaN(amount) || amount === 0 || !category) return;
@@ -4931,6 +4936,65 @@ async function applyFutureModify(idx) {
   renderDashboard();
   if (state.connected) backgroundSave(db.saveExpenses(state.expenses));
 }
+
+// --- Amount math ---
+// Lets any amount box accept simple arithmetic (e.g. 125-21.10) and saves only
+// the result. Safe parser — never uses eval. Supports + - * / ( ) and decimals.
+function evalMath(input) {
+  const s = String(input == null ? '' : input)
+    .replace(/[$\s]/g, '').replace(/,/g, '').replace(/×/g, '*').replace(/÷/g, '/');
+  if (!s || !/^[0-9+\-*/().]+$/.test(s)) return NaN;
+  let i = 0;
+  const peek = () => s[i];
+  function expr() {
+    let v = term();
+    while (peek() === '+' || peek() === '-') { const op = s[i++]; const r = term(); v = op === '+' ? v + r : v - r; }
+    return v;
+  }
+  function term() {
+    let v = factor();
+    while (peek() === '*' || peek() === '/') { const op = s[i++]; const r = factor(); v = op === '*' ? v * r : v / r; }
+    return v;
+  }
+  function factor() {
+    if (peek() === '+') { i++; return factor(); }
+    if (peek() === '-') { i++; return -factor(); }
+    if (peek() === '(') {
+      i++; const v = expr();
+      if (peek() !== ')') throw new Error('unbalanced');
+      i++; return v;
+    }
+    const m = /^(\d+\.?\d*|\.\d+)/.exec(s.slice(i));
+    if (!m) throw new Error('number expected');
+    i += m[0].length;
+    return parseFloat(m[0]);
+  }
+  try {
+    const v = expr();
+    return (i === s.length && isFinite(v)) ? v : NaN;
+  } catch (e) { return NaN; }
+}
+
+// Evaluates an amount (plain number or expression) and rounds to cents. NaN if invalid/empty.
+function parseAmount(v) {
+  const n = evalMath(v);
+  return isNaN(n) ? NaN : Math.round(n * 100) / 100;
+}
+
+// When leaving an amount box (or pressing Enter), replace the expression with its result.
+function normalizeMathInput(el) {
+  if (!el.value.trim()) return;
+  const n = parseAmount(el.value);
+  if (isNaN(n)) return; // leave as typed so it can be fixed
+  const out = n.toFixed(2);
+  if (el.value !== out) el.value = out;
+}
+document.addEventListener('focusout', e => {
+  if (e.target.matches && e.target.matches('input[data-math]')) normalizeMathInput(e.target);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches && e.target.matches('input[data-math]')) normalizeMathInput(e.target);
+});
 
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
