@@ -1,5 +1,5 @@
 // Nectra Service Worker
-const CACHE_NAME = 'nectra-v3';
+const CACHE_NAME = 'nectra-v7';
 
 const SHELL_URLS = [
   './',
