@@ -58,10 +58,10 @@
     #tab-dashboard.panel.active {
       display: grid;
       grid-template-columns: 1fr 320px;
-      grid-template-rows: auto auto 1fr;
+      grid-template-rows: auto auto auto 1fr;
       gap: 0 2rem;
     }
-    #summary-cards-wrap { grid-column: 1 / -1; }
+    #summary-cards-wrap, #budget-gauge-wrap { grid-column: 1 / -1; }
     #dashboard-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; margin-bottom: 1.75rem; }
     #categories-view { grid-column: 1; }
     #dashboard-sidebar { grid-column: 2; display: flex; flex-direction: column; gap: 14px; }
@@ -73,6 +73,13 @@
     .app { padding: 2rem 4rem 4rem; max-width: 1600px; }
     .cat-row { grid-template-columns: 260px 1fr 110px 110px 110px; }
   }
+  /* Optional spending gauge (Settings -> My Preferences) */
+  #budget-gauge-wrap { display: none; justify-content: center; margin-bottom: 1.25rem; }
+  .gauge-card { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 1rem 1.5rem 1.1rem; width: 100%; max-width: 340px; text-align: center; }
+  .gauge-card svg { width: 100%; max-width: 260px; height: auto; display: block; margin: 0 auto; }
+  .gauge-needle { transform-box: view-box; transform-origin: 100px 100px; transition: transform .9s cubic-bezier(.34,1.3,.5,1); }
+  .gauge-label { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; margin-top: 2px; transition: color .3s; }
+  .gauge-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
   header { margin-bottom: 1.75rem; padding: 1.25rem 1.5rem; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: space-between; }
   header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.03em; background: linear-gradient(135deg, var(--accent) 0%, #9B59D0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   .header-right { display: flex; align-items: center; gap: 10px; }
@@ -559,6 +566,19 @@
   </div>
 
   <div id="tab-dashboard" class="panel active">
+    <div id="budget-gauge-wrap">
+      <div class="gauge-card">
+        <svg viewBox="0 0 200 118" aria-hidden="true">
+          <path d="M 20.00 100.00 A 80 80 0 0 1 134.71 27.92" fill="none" stroke="#34C759" stroke-width="16"/><path d="M 134.71 27.92 A 80 80 0 0 1 162.55 50.12" fill="none" stroke="#FFCC00" stroke-width="16"/><path d="M 162.55 50.12 A 80 80 0 0 1 180.00 100.00" fill="none" stroke="#FF3B30" stroke-width="16"/>
+          <g id="gauge-needle" class="gauge-needle" style="transform: rotate(0deg);">
+            <line x1="100" y1="100" x2="36" y2="100" stroke="#1C1C1E" stroke-width="3.5" stroke-linecap="round"/>
+          </g>
+          <circle cx="100" cy="100" r="7" fill="#1C1C1E"/>
+        </svg>
+        <div class="gauge-label" id="gauge-label"></div>
+        <div class="gauge-sub" id="gauge-sub"></div>
+      </div>
+    </div>
     <div id="summary-cards-wrap">
       <div class="summary-grid" id="summary-cards"></div>
     </div>
@@ -596,12 +616,27 @@
           <button class="toggle-btn" onclick="setExpPeriod('custom',event)">Custom</button>
           <select id="exp-month-picker" style="display:none; font-size:13px; padding:5px 10px; width:auto;" onchange="setExpCustomMonth(this.value)"></select>
         </div>
-        <input type="text" id="search-input" placeholder="Search..." style="flex:1; min-width:120px; max-width:220px; padding:7px 12px; font-size:13px;" oninput="renderExpenseTable()">
+        <input type="text" id="search-input" placeholder="Search..." style="min-width:120px; max-width:180px; padding:7px 12px; font-size:13px; flex-shrink:0;" oninput="renderExpenseTable()">
       </div>
       <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
         <button class="filter-chip active" id="exp-filter-all" onclick="setExpFilter(null,event)">All</button>
         <button class="filter-chip" id="exp-filter-uncategorized" onclick="setExpFilter('__uncategorized__',event)" style="border-color:#E09A2A; color:#B7610A;">⚑ Uncategorized</button>
         <span id="exp-filter-chips"></span>
+        <!-- Compact searchable category filter — right-aligned in the chip row -->
+        <div id="cat-filter-wrap" style="position:relative; margin-left:auto;">
+          <button id="cat-filter-btn" onclick="toggleCatFilterDropdown()"
+            style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;background:var(--surface);border:1.5px solid var(--border-strong);border-radius:20px;cursor:pointer;font-family:var(--sans);color:var(--muted);white-space:nowrap;">
+            <span id="cat-filter-label">Category</span>
+            <span style="font-size:10px;">▾</span>
+          </button>
+          <div id="cat-filter-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1.5px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-lg);min-width:200px;z-index:100;overflow:hidden;">
+            <div style="padding:8px;">
+              <input type="text" id="cat-filter-search" placeholder="Search categories..." oninput="renderCatFilterOptions()"
+                style="width:100%;font-size:13px;padding:6px 8px;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);font-family:var(--sans);">
+            </div>
+            <div id="cat-filter-options" style="max-height:220px;overflow-y:auto;padding:0 4px 6px;"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div id="exp-count" style="font-size:13px; color:var(--muted); margin-bottom:8px;"></div>
@@ -618,7 +653,7 @@
         </div>
         <div class="form-group">
           <label class="field-label">Amount ($)</label>
-          <input type="number" id="exp-amount" placeholder="0.00" step="0.01">
+          <input type="text" inputmode="decimal" data-math autocomplete="off" id="exp-amount" placeholder="0.00">
         </div>
         <div class="form-group">
           <label class="field-label">Category</label>
@@ -796,6 +831,13 @@
             <div style="font-size:12px; color:var(--muted);">Subtle vibration on actions (Android only — iPhone does not support this in web apps)</div>
           </div>
         </div>
+        <div class="form-group full" style="flex-direction:row; align-items:center; gap:10px; padding-top:4px;">
+          <input type="checkbox" id="pref-gauge" onchange="saveGaugePref()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent); flex-shrink:0;">
+          <div>
+            <label for="pref-gauge" style="font-size:14px; font-weight:500; cursor:pointer;">Spending gauge</label>
+            <div style="font-size:12px; color:var(--muted);">Show a gauge at the top of the dashboard for how overall spending is tracking against budget</div>
+          </div>
+        </div>
     </div>
 
     <div class="settings-section">
@@ -872,12 +914,18 @@
       </div>
     </div>
 
+    <div class="settings-section">
+      <h2>Help</h2>
+      <p class="text-sm text-muted" style="margin-bottom:1rem;">Found a bug, have a question, or want to request a feature? Send us an email and we'll get back to you.</p>
+      <a href="mailto:nectrasupport@gmail.com?subject=Nectra%20Support" class="btn btn-secondary" style="font-size:13px; display:inline-block; text-decoration:none;">📧 Contact support</a>
+    </div>
+
     <div style="margin-top:1rem; text-align:center;">
       <span id="sync-indicator" class="sync-status synced" style="font-size:12px;"><span class="dot"></span> All changes synced</span>
     </div>
 
     <div style="margin-top:1.5rem; text-align:center;">
-      <span style="font-size:11px; color:var(--muted);">Nectra v1.12</span>
+      <span style="font-size:11px; color:var(--muted);">Nectra v1.49</span>
     </div>
 
   </div>
@@ -1277,7 +1325,9 @@ function friendlyAuthError(e) {
   return map[e.code] || e.message;
 }
 
+let _explicitSignOut = false;
 function signOut() {
+  _explicitSignOut = true;
   fbAuth.signOut();
 }
 
@@ -1303,6 +1353,8 @@ function initFirebase() {
   fbAuth = firebase.auth();
   fbDb   = firebase.firestore();
 
+  let authResolved = false;
+
   fbAuth.onAuthStateChanged(async user => {
     const signinScreen = document.getElementById('signin-screen');
     const appRoot      = document.getElementById('app-root');
@@ -1310,13 +1362,56 @@ function initFirebase() {
     const headerSignout = document.getElementById('header-signout');
 
     if (!user) {
-      hideSplash();
-      signinScreen.style.display = 'flex';
-      appRoot.style.display = 'none';
-      state.connected = false;
-      setConnStatus(false);
-      if (headerSignout) headerSignout.style.display = 'none';
+      // Firebase can report a transient null here — both on initial page load
+      // (before a persisted session is restored) and, with Google's popup
+      // sign-in specifically, as a brief mid-flow event before the real user
+      // lands. Only an explicit user-initiated sign-out should show the
+      // sign-in screen immediately; every other null gets buffered with a
+      // short poll so a real user arriving right after doesn't cause a flash.
+      if (_explicitSignOut) {
+        hideSplash();
+        signinScreen.style.display = 'flex';
+        appRoot.style.display = 'none';
+        state.connected = false;
+        setConnStatus(false);
+        if (headerSignout) headerSignout.style.display = 'none';
+        _explicitSignOut = false;
+        authResolved = true;
+        return;
+      }
+
+      let checks = 0;
+      const maxChecks = 10; // ~2s total
+      const poll = () => {
+        checks++;
+        if (fbAuth.currentUser) return; // real user resolved elsewhere — do nothing
+        if (checks >= maxChecks) {
+          hideSplash();
+          signinScreen.style.display = 'flex';
+          appRoot.style.display = 'none';
+          state.connected = false;
+          setConnStatus(false);
+          if (headerSignout) headerSignout.style.display = 'none';
+        } else {
+          setTimeout(poll, 200);
+        }
+      };
+      setTimeout(poll, 200);
+      authResolved = true;
       return;
+    }
+    authResolved = true;
+
+    // We have a confirmed real user — immediately hide the sign-in screen and
+    // show the splash/loading state rather than leaving the stale sign-in
+    // screen visible during the async family lookup below. Without this,
+    // there's a real network-latency gap (Firestore reads) where the old
+    // sign-in screen sits there after the Google popup closes.
+    {
+      const s = document.getElementById('signin-screen');
+      if (s) s.style.display = 'none';
+      const splash = document.getElementById('splash-screen');
+      if (splash) { splash.style.display = 'flex'; splash.classList.remove('hiding'); }
     }
 
     // Look up the user's family from /users/{uid}
@@ -1838,13 +1933,105 @@ function setExpCustomMonth(val) {
   renderExpenseTable();
 }
 
+function setCategoryFilter(catName) {
+  closeCatFilterDropdown();
+  if (!catName) { clearCatFilter(); return; }
+  document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
+    .forEach(b => b.classList.remove('active'));
+  state.expFilter = '__category__:' + catName;
+  saveExpPrefs();
+  renderExpenseTable();
+  updatePeriodLabel();
+}
+
+function toggleCatFilterDropdown() {
+  const dd = document.getElementById('cat-filter-dropdown');
+  const isOpen = dd.style.display !== 'none';
+  if (isOpen) { closeCatFilterDropdown(); return; }
+  dd.style.display = 'block';
+  document.getElementById('cat-filter-search').value = '';
+  renderCatFilterOptions();
+  setTimeout(() => document.getElementById('cat-filter-search').focus(), 50);
+  // Close on outside click
+  setTimeout(() => document.addEventListener('click', catFilterOutsideClick), 0);
+}
+
+function closeCatFilterDropdown() {
+  document.getElementById('cat-filter-dropdown').style.display = 'none';
+  document.removeEventListener('click', catFilterOutsideClick);
+}
+
+function catFilterOutsideClick(e) {
+  const wrap = document.getElementById('cat-filter-wrap');
+  if (!wrap?.contains(e.target)) closeCatFilterDropdown();
+}
+
+function renderCatFilterOptions() {
+  const q = (document.getElementById('cat-filter-search')?.value || '').toLowerCase();
+  const current = state.expFilter?.startsWith('__category__:')
+    ? state.expFilter.slice('__category__:'.length) : '';
+  const el = document.getElementById('cat-filter-options');
+  if (!el) return;
+
+  const cats = state.categories.filter(c => !q || c.name.toLowerCase().includes(q));
+  el.innerHTML = [
+    `<div onclick="clearCatFilter()" style="padding:7px 10px;cursor:pointer;font-size:13px;color:var(--muted);border-radius:var(--radius-sm);" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+      Clear filter
+    </div>`,
+    ...cats.map(c => `
+      <div onclick="setCategoryFilter('${escHtml(c.name)}')"
+        style="padding:7px 10px;cursor:pointer;font-size:13px;border-radius:var(--radius-sm);font-weight:${c.name===current?'600':'400'};color:${c.name===current?'var(--accent)':'var(--text)'};"
+        onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+        ${escHtml(c.name)}${c.name===current?' ✓':''}
+      </div>`)
+  ].join('');
+}
+
+function clearCatFilter() {
+  closeCatFilterDropdown();
+  document.getElementById('cat-filter-label').textContent = 'Category';
+  document.getElementById('cat-filter-label').style.color = '';
+  setExpFilter(null, { currentTarget: document.getElementById('exp-filter-all') });
+}
+
+function populateCatFilterDropdown() {
+  // Update button label to reflect current filter
+  const btn = document.getElementById('cat-filter-label');
+  if (!btn) return;
+  if (state.expFilter?.startsWith('__category__:')) {
+    const name = state.expFilter.slice('__category__:'.length);
+    btn.textContent = name;
+    btn.style.color = 'var(--accent)';
+    document.getElementById('cat-filter-btn').style.borderColor = 'var(--accent)';
+  } else {
+    btn.textContent = 'Category';
+    btn.style.color = '';
+    document.getElementById('cat-filter-btn').style.borderColor = '';
+  }
+}
+
+function saveExpPrefs() {
+  localStorage.setItem(prefsKey('expPeriod'), state.expPeriod || 'monthly');
+  localStorage.setItem(prefsKey('expFilter'), state.expFilter || '');
+}
+
 function setExpFilter(name, e) {
   state.expFilter = name;
   // Update chip active states
   document.querySelectorAll('#exp-filter-all, #exp-filter-uncategorized, #exp-filter-chips .filter-chip')
     .forEach(b => b.classList.remove('active'));
-  e.currentTarget.classList.add('active');
+  if (e?.currentTarget) e.currentTarget.classList.add('active');
+  else if (!name) document.getElementById('exp-filter-all')?.classList.add('active');
+  // Reset category filter button when switching away from category filter
+  if (!name?.startsWith('__category__:')) {
+    const lbl = document.getElementById('cat-filter-label');
+    const btn = document.getElementById('cat-filter-btn');
+    if (lbl) { lbl.textContent = 'Category'; lbl.style.color = ''; }
+    if (btn) btn.style.borderColor = '';
+  }
+  saveExpPrefs();
   renderExpenseTable();
+  updatePeriodLabel();
 }
 
 function renderExpFilterChips() {
@@ -1957,6 +2144,7 @@ function renderDashboard() {
   const totalSpent = filtered.filter(e => visibleCats.some(c=>c.name===e.category)).reduce((s,e) => s+(parseFloat(e.amount)||0), 0);
   const totalBudget = visibleCats.reduce((s,c) => s+getBudgetForPeriod(c), 0);
   const remain = totalBudget - totalSpent;
+  updateBudgetGauge(totalSpent, totalBudget);
 
   const cards = document.getElementById('summary-cards');
   const monthsElapsed = now.getMonth() + 1;
@@ -2211,6 +2399,7 @@ function populatePrefsUI() {
   set('pref-period', 'period', 'monthly');
   set('pref-filter', 'filter', '');
   loadHapticPref();
+  loadGaugePref();
 }
 
 function saveUserPrefs() {
@@ -2436,6 +2625,7 @@ function setSort(col) {
 
 function renderExpenseTable() {
   renderExpFilterChips();
+  populateCatFilterDropdown();
   updateUncatBadge();
   const allBtn = document.getElementById('exp-filter-all');
   const uncBtn = document.getElementById('exp-filter-uncategorized');
@@ -2607,7 +2797,7 @@ function renderSplitEditor(idx) {
   let linesHtml = lines.map((l, li) => `
     <div class="split-line" id="split-line-${li}">
       ${createSearchableSelectHTML(`split-cat-${li}`, l.category)}
-      <input type="number" placeholder="Amount" value="${l.amount}" step="0.01"
+      <input type="text" inputmode="decimal" data-math autocomplete="off" placeholder="Amount" value="${l.amount}"
         onchange="updateSplitLine(${li},'amount',this.value)"
         onblur="autoFillLast(${li})" style="font-size: 13px; padding: 6px 9px;">
       <button class="del-btn" onclick="removeSplitLine(${li})" style="font-size:14px;">✕</button>
@@ -2648,6 +2838,11 @@ function renderSplitEditor(idx) {
 }
 
 function updateSplitLine(li, key, val) {
+  if (key === 'amount') {
+    // Evaluate any math (e.g. 125-21.10) and store the plain result
+    const n = parseAmount(val);
+    val = isNaN(n) ? '' : n.toFixed(2);
+  }
   splitState.lines[li][key] = val;
   renderSplitEditor(splitState.idx);
 }
@@ -2671,7 +2866,7 @@ function addSplitLine() {
   // Focus the new amount field
   setTimeout(() => {
     const lines = document.querySelectorAll('.split-line');
-    lines[lines.length - 1]?.querySelector('input[type=number]')?.focus();
+    lines[lines.length - 1]?.querySelector('input[data-math]')?.focus();
   }, 30);
 }
 
@@ -2739,7 +2934,7 @@ function openEdit(idx) {
     </div>
     <div class="form-group">
       <label class="field-label">Amount ($)</label>
-      <input type="number" id="edit-amount-${idx}" value="${e.amount||''}" step="0.01">
+      <input type="text" inputmode="decimal" data-math autocomplete="off" id="edit-amount-${idx}" value="${e.amount||''}">
     </div>
     <div class="form-group">
       <label class="field-label">Category</label>
@@ -2792,7 +2987,7 @@ function closeEdit(idx) {
 
 async function saveEdit(idx) {
   const date = document.getElementById(`edit-date-${idx}`)?.value;
-  const amount = parseFloat(document.getElementById(`edit-amount-${idx}`)?.value);
+  const amount = parseAmount(document.getElementById(`edit-amount-${idx}`)?.value);
   const category = document.getElementById(`edit-cat-${idx}`)?.value;
   const who = document.getElementById(`edit-who-${idx}`)?.value;
   const description = document.getElementById(`edit-desc-${idx}`)?.value.trim();
@@ -3023,6 +3218,13 @@ function initSearchableSelect() {
     selectContainer.classList.add('open');
     filterCategoryOptions('');
   });
+
+  input.addEventListener('click', function() {
+    if (!selectContainer.classList.contains('open')) {
+      selectContainer.classList.add('open');
+      filterCategoryOptions('');
+    }
+  });
   
   input.addEventListener('input', function() {
     filterCategoryOptions(this.value);
@@ -3051,6 +3253,11 @@ function initSearchableSelect() {
     setTimeout(() => {
       if (!selectContainer.contains(document.activeElement)) {
         selectContainer.classList.remove('open');
+        const hidden = selectContainer.querySelector('input[type="hidden"]');
+        const visInput = selectContainer.querySelector('.cat-search-input');
+        if (hidden && visInput && visInput.value !== hidden.value) {
+          visInput.value = hidden.value;
+        }
       }
     }, 100);
   });
@@ -3118,6 +3325,18 @@ function initDynamicSearchableSelects(selectId) {
     selectContainer.classList.add('open');
     filterDynamicCategoryOptions(selectId, '');
   });
+
+  // Also reopen on click, since the browser may not re-fire 'focus' if the
+  // input never actually lost focus after a previous option selection
+  // (mousedown preventDefault on the options list keeps focus in the input).
+  input.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!selectContainer.classList.contains('open')) {
+      this.value = '';
+      selectContainer.classList.add('open');
+      filterDynamicCategoryOptions(selectId, '');
+    }
+  });
   
   input.addEventListener('input', function(e) {
     e.stopPropagation();
@@ -3138,6 +3357,10 @@ function initDynamicSearchableSelects(selectId) {
     setTimeout(() => {
       if (!selectContainer.contains(document.activeElement)) {
         selectContainer.classList.remove('open');
+        const hidden = document.getElementById(selectId);
+        if (hidden && input.value !== hidden.value) {
+          input.value = hidden.value;
+        }
       }
     }, 100);
   });
@@ -3186,7 +3409,7 @@ function updateCategorySelectsInForms() {
 // --- Add Transaction ---
 async function addExpense() {
   const date = document.getElementById('exp-date').value;
-  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const amount = parseAmount(document.getElementById('exp-amount').value);
   const category = document.getElementById('exp-cat').value;
   const description = document.getElementById('exp-desc').value.trim();
   const memo = document.getElementById('exp-memo').value.trim();
@@ -3525,6 +3748,7 @@ async function importQFX() {
     ws[state._watchedPendingKey] = 'imported';
     setWatchedFileState(ws);
     state._watchedPendingKey = null;
+    scanWatchedFolders();
   }
 
   const uncat = added - autoCat - refunds;
@@ -3734,6 +3958,15 @@ async function importCSV() {
   document.getElementById('csv-input').value = '';
   state.csvRows = []; state.csvHeaders = [];
 
+  // Mark watched file as imported now that import actually completed
+  if (state._watchedPendingKey) {
+    const ws = getWatchedFileState();
+    ws[state._watchedPendingKey] = 'imported';
+    setWatchedFileState(ws);
+    state._watchedPendingKey = null;
+    scanWatchedFolders();
+  }
+
   const uncat = added - autoCat - refunds;
   const refundNote = refunds > 0 ? `, ${refunds} refund${refunds!==1?'s':''}` : '';
   const deletedNote = deleted > 0 ? `, ${deleted} skipped by rules` : '';
@@ -3805,7 +4038,7 @@ function renderBudgetPlanner() {
         '<div style="text-align:right;font-size:13px;">' + (actual > 0 ? '$'+fmt(actual) : '<span style="color:var(--muted)">—</span>') + '</div>' +
         '<div style="text-align:right;font-size:13px;font-weight:500;color:' + (over?'var(--danger)':'var(--green-dark)') + ';">' + (diff === 0 ? '—' : (over?'+':'-')+'$'+fmt(Math.abs(diff))) + '</div>' +
         '<div style="text-align:right;">' +
-          '<input type="number" class="planner-input" data-name="' + escHtml(c.name) + '" data-period="' + (c.period||'monthly') + '"' +
+          '<input type="text" inputmode="decimal" data-math autocomplete="off" class="planner-input" data-name="' + escHtml(c.name) + '" data-period="' + (c.period||'monthly') + '"' +
           ' value="' + activeBudget.toFixed(2) + '" min="0" step="0.01"' +
           ' style="width:100%;font-size:13px;padding:4px 6px;text-align:right;"' +
           ' oninput="updatePlannerTotals()">' +
@@ -3834,7 +4067,7 @@ function updatePlannerTotals() {
     totalActual += actualByCategory[c.name] || 0;
   });
   document.querySelectorAll('.planner-input').forEach(function(inp) {
-    totalNew += parseFloat(inp.value) || 0;
+    totalNew += parseAmount(inp.value) || 0;
   });
   const diff = totalNew - totalLastBudget;
   const over = diff > 0;
@@ -3861,7 +4094,7 @@ async function saveBudgetPlan() {
   const newCategories = state.categories.map(function(c) {
     const input = Array.from(inputs).find(function(inp) { return inp.dataset.name === c.name; });
     if (!input) return c;
-    const annualNew = parseFloat(input.value) || 0;
+    const annualNew = parseAmount(input.value) || 0;
     const newBudget = c.period === 'yearly' ? annualNew : annualNew / 12;
     return Object.assign({}, c, { budget: parseFloat(newBudget.toFixed(2)) });
   });
@@ -3924,7 +4157,7 @@ function renderBudgetEditor() {
           ondragend="onDragEnd(event)">
         <span class="item-drag-handle" title="Drag to reorder" draggable="true" ondragstart="onItemDragStart(event,${c._i})">⠿</span>
         <input type="text" value="${escHtml(c.name)}" onchange="updateCat(${c._i},'name',this.value)" placeholder="Category name">
-        <input type="number" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00" step="0.01" min="0">
+        <input type="text" inputmode="decimal" data-math autocomplete="off" value="${c.budget||''}" onchange="updateCat(${c._i},'budget',this.value)" placeholder="0.00">
         <select class="period-sel" onchange="updateCat(${c._i},'period',this.value)">
           <option value="monthly" ${c.period==='monthly'?'selected':''}>Monthly</option>
           <option value="yearly" ${c.period==='yearly'?'selected':''}>Yearly</option>
@@ -3954,7 +4187,7 @@ function updateCat(i, key, val) {
       if (state.connected) db.saveExpenses(state.expenses).catch(() => {});
     }
   }
-  state.categories[i][key] = key === 'budget' ? parseFloat(val)||0 : val;
+  state.categories[i][key] = key === 'budget' ? parseAmount(val)||0 : val;
 }
 
 function removeCat(i) {
@@ -4612,6 +4845,48 @@ function saveHapticPref() {
   if (checked) navigator.vibrate && navigator.vibrate([25, 50, 25, 50, 25]); // demo pattern
 }
 
+// --- Spending gauge (optional, off by default, per device) ---
+function gaugeEnabled() { return localStorage.getItem(prefsKey('gauge')) === 'true'; }
+
+function saveGaugePref() {
+  const checked = document.getElementById('pref-gauge')?.checked;
+  localStorage.setItem(prefsKey('gauge'), checked ? 'true' : 'false');
+  renderDashboard();
+}
+
+function loadGaugePref() {
+  const el = document.getElementById('pref-gauge');
+  if (el) el.checked = gaugeEnabled();
+}
+
+// Green <=90% used, yellow 91-109%, red 110%+. Follows whatever period/filter the dashboard shows.
+function updateBudgetGauge(spent, budget) {
+  const wrap = document.getElementById('budget-gauge-wrap');
+  if (!wrap) return;
+  if (!gaugeEnabled()) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+
+  let text, color, pct = null;
+  if (budget > 0) {
+    pct = Math.round(spent / budget * 100);
+    if (pct <= 90)       { text = 'Live a little!';    color = '#248A3D'; }
+    else if (pct <= 109) { text = 'On Track';          color = '#B7860B'; }
+    else                 { text = 'Spending Freeze!';  color = '#FF3B30'; }
+  } else {
+    text = 'No budget set'; color = 'var(--muted)';
+  }
+
+  // Needle: scale runs 0%-140% across the half circle
+  const raw = pct === null ? 0 : Math.max(0, Math.min(140, spent / budget * 100));
+  document.getElementById('gauge-needle').style.transform = 'rotate(' + (raw / 140 * 180) + 'deg)';
+  const label = document.getElementById('gauge-label');
+  label.textContent = text;
+  label.style.color = color;
+  document.getElementById('gauge-sub').textContent = pct === null
+    ? 'Set budgets to use the gauge'
+    : pct + '% of budget used · $' + fmt(spent) + ' of $' + fmt(budget);
+}
+
 function loadHapticPref() {
   const el = document.getElementById('pref-haptics');
   if (!el) return;
@@ -4705,7 +4980,7 @@ function showModifyFutureForm(idx) {
   document.getElementById('recur-modal-actions').innerHTML =
     '<div class="form-grid" style="margin-bottom:1rem;">' +
     '<div class="form-group"><label class="field-label">Amount</label>' +
-    '<input type="number" id="recur-edit-amount" value="' + e.amount + '" step="0.01"></div>' +
+    '<input type="text" inputmode="decimal" data-math autocomplete="off" id="recur-edit-amount" value="' + e.amount + '"></div>' +
     '<div class="form-group"><label class="field-label">Category</label>' +
     '<select id="recur-edit-cat">' + catOptions + '</select></div>' +
     '<div class="form-group full"><label class="field-label">Description</label>' +
@@ -4717,7 +4992,7 @@ async function applyFutureModify(idx) {
   const e = state.expenses[idx];
   if (!e) return;
   const rid = e.recurringId;
-  const amount      = parseFloat(document.getElementById('recur-edit-amount')?.value);
+  const amount      = parseAmount(document.getElementById('recur-edit-amount')?.value);
   const category    = document.getElementById('recur-edit-cat')?.value;
   const description = document.getElementById('recur-edit-desc')?.value.trim();
   if (isNaN(amount) || amount === 0 || !category) return;
@@ -4732,6 +5007,65 @@ async function applyFutureModify(idx) {
   renderDashboard();
   if (state.connected) backgroundSave(db.saveExpenses(state.expenses));
 }
+
+// --- Amount math ---
+// Lets any amount box accept simple arithmetic (e.g. 125-21.10) and saves only
+// the result. Safe parser — never uses eval. Supports + - * / ( ) and decimals.
+function evalMath(input) {
+  const s = String(input == null ? '' : input)
+    .replace(/[$\s]/g, '').replace(/,/g, '').replace(/×/g, '*').replace(/÷/g, '/');
+  if (!s || !/^[0-9+\-*/().]+$/.test(s)) return NaN;
+  let i = 0;
+  const peek = () => s[i];
+  function expr() {
+    let v = term();
+    while (peek() === '+' || peek() === '-') { const op = s[i++]; const r = term(); v = op === '+' ? v + r : v - r; }
+    return v;
+  }
+  function term() {
+    let v = factor();
+    while (peek() === '*' || peek() === '/') { const op = s[i++]; const r = factor(); v = op === '*' ? v * r : v / r; }
+    return v;
+  }
+  function factor() {
+    if (peek() === '+') { i++; return factor(); }
+    if (peek() === '-') { i++; return -factor(); }
+    if (peek() === '(') {
+      i++; const v = expr();
+      if (peek() !== ')') throw new Error('unbalanced');
+      i++; return v;
+    }
+    const m = /^(\d+\.?\d*|\.\d+)/.exec(s.slice(i));
+    if (!m) throw new Error('number expected');
+    i += m[0].length;
+    return parseFloat(m[0]);
+  }
+  try {
+    const v = expr();
+    return (i === s.length && isFinite(v)) ? v : NaN;
+  } catch (e) { return NaN; }
+}
+
+// Evaluates an amount (plain number or expression) and rounds to cents. NaN if invalid/empty.
+function parseAmount(v) {
+  const n = evalMath(v);
+  return isNaN(n) ? NaN : Math.round(n * 100) / 100;
+}
+
+// When leaving an amount box (or pressing Enter), replace the expression with its result.
+function normalizeMathInput(el) {
+  if (!el.value.trim()) return;
+  const n = parseAmount(el.value);
+  if (isNaN(n)) return; // leave as typed so it can be fixed
+  const out = n.toFixed(2);
+  if (el.value !== out) el.value = out;
+}
+document.addEventListener('focusout', e => {
+  if (e.target.matches && e.target.matches('input[data-math]')) normalizeMathInput(e.target);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches && e.target.matches('input[data-math]')) normalizeMathInput(e.target);
+});
 
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
